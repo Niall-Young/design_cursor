@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Design cursor",
+  "version": "0.1.0",
+  "description": "选中网页元素并复制为适合粘贴到 AI 对话中的结构化上下文。",
+  "permissions": [
+    "activeTab",
+    "clipboardWrite",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "icons": {
+    "16": "logo_16.png",
+    "48": "logo_48.png",
+    "128": "logo_128.png"
+  },
+  "action": {
+    "default_title": "切换 Design cursor",
+    "default_icon": {
+      "16": "logo_16.png",
+      "48": "logo_48.png",
+      "128": "logo_128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "toggle-picker": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "切换 Design cursor"
+    }
+  }
+}
