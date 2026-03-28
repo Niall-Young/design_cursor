@@ -8,9 +8,6 @@
     "clipboardWrite",
     "scripting"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
   "icons": {
     "16": "logo_16.png",
     "48": "logo_48.png",
@@ -27,20 +24,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "css": [
-        "content.css"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "commands": {
     "toggle-picker": {
       "suggested_key": {

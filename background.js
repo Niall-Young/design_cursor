@@ -3,25 +3,59 @@ async function withActiveTab(callback) {
   if (!tab?.id) {
     return;
   }
-  callback(tab.id);
+  await callback(tab.id);
 }
 
 function sendToggleMessage(tabId) {
-  chrome.tabs.sendMessage(tabId, { type: "CHAT_CONTEXT_PICKER_TOGGLE" }, () => {
-    if (chrome.runtime.lastError) {
-      // The content script is declared in the manifest, so this is expected only
-      // on internal browser pages where extensions cannot run.
-    }
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, { type: "CHAT_CONTEXT_PICKER_TOGGLE" }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
   });
 }
 
+async function ensurePickerInjected(tabId) {
+  const [{ result: isLoaded }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => Boolean(window.__chatContextPickerLoaded)
+  });
+
+  if (isLoaded) {
+    return;
+  }
+
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ["content.css"]
+  });
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content.js"]
+  });
+}
+
+async function togglePickerOnActiveTab(tabId) {
+  try {
+    await ensurePickerInjected(tabId);
+    await sendToggleMessage(tabId);
+  } catch (injectionError) {
+    // Injection is expected to fail on internal browser pages where extensions cannot run.
+    console.warn("Failed to inject Design Cursor into the active tab.", injectionError);
+  }
+}
+
 chrome.action.onClicked.addListener(async () => {
-  await withActiveTab(sendToggleMessage);
+  await withActiveTab(togglePickerOnActiveTab);
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== "toggle-picker") {
     return;
   }
-  await withActiveTab(sendToggleMessage);
+  await withActiveTab(togglePickerOnActiveTab);
 });
