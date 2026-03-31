@@ -2,6 +2,10 @@
 
 Design cursor is a Chrome/Edge extension for selecting elements on a web page and copying them as structured context for AI-assisted UI editing.
 
+## License
+
+This project is distributed under the `PolyForm Noncommercial 1.0.0` license. You can use, study, and modify it for noncommercial purposes, but not use it directly for commercial purposes.
+
 ## What It Does
 
 - Select one or more elements or text fragments directly on a page
