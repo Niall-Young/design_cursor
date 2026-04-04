@@ -1,60 +1,102 @@
 # Design cursor
 
-Design cursor is a Chrome/Edge extension for selecting elements on a web page and copying them as structured context for AI-assisted UI editing.
+Design cursor 是一个面向 Chrome / Edge 的浏览器扩展，用来在网页中直接选中元素，并把它们整理成适合粘贴到 AI 对话中的结构化上下文，方便做 UI 修改、布局调整和页面还原。
 
-## License
+当前版本：`0.2.0`
 
-This project is distributed under the `PolyForm Noncommercial 1.0.0` license. You can use, study, and modify it for noncommercial purposes, but not use it directly for commercial purposes.
+## 项目定位
 
-## What It Does
+这个项目主要解决的是这样的工作流：
 
-- Select one or more elements or text fragments directly on a page
-- Keep a running selection list in the extension panel
-- Copy structured context for use in tools like Codex, Cursor, ChatGPT, or other AI editors
-- Include useful metadata such as:
-  - page title and URL
-  - selector information
-  - text content
-  - size and position
-  - key computed styles
-  - related HTML snippet
+1. 在网页上直接圈出你想修改的元素
+2. 把这些元素的结构、文本、尺寸、样式和位置信息整理出来
+3. 复制到 Codex、Cursor、ChatGPT 或其他 AI 编辑器
+4. 让 AI 基于真实页面上下文继续修改界面
 
-## Install
+它更像一个“网页设计上下文采集器”，而不是传统意义上的截图工具。
 
-1. Open `chrome://extensions/` in Chrome or Edge
-2. Enable Developer Mode
-3. Click `Load unpacked`
-4. Select this repository folder
+## 主要功能
 
-## Usage
+- 直接在网页中选择一个或多个元素
+- 支持选择文本片段或普通 DOM 元素
+- 在工具栏面板里维护当前选择列表
+- 复制适合发送给 AI 的结构化页面上下文
+- 自动附带以下信息：
+  - 页面标题
+  - 页面地址
+  - 元素选择器
+  - 文本内容
+  - 位置和尺寸
+  - 关键计算样式
+  - HTML 片段
+- 支持给已选元素补充“修改提示词”
+- 支持布局调整模式
+- 在布局调整模式下可多选元素并通过拖拽中心控制点交换位置
+- 在布局调整模式下复制内容时，会额外标注这是“换位置 / 调整顺序”的任务
 
-1. Open the page you want to edit
-2. Click the extension icon, or use the shortcut:
+## 安装方式
+
+1. 打开 Chrome 或 Edge 的扩展页：
+
+```text
+chrome://extensions/
+```
+
+2. 开启“开发者模式”
+3. 点击“加载已解压的扩展程序”
+4. 选择当前项目目录
+
+## 使用方式
+
+1. 打开你想修改的网页
+2. 点击扩展图标，或使用快捷键启动：
 
 ```text
 Mac: Command+Shift+Y
 Windows: Ctrl+Shift+Y
 ```
 
-3. Hover over the page to preview selectable targets
-4. Click to add elements or text to the selection
-5. Copy the collected context from the panel
-6. Paste it into your AI editor and describe the change you want
+3. 在页面中切换需要的模式：
+   - 浏览模式
+   - 选择模式
+   - 布局调整模式
+4. 在选择模式下，点击元素或文本，把它加入选择列表
+5. 如有需要，可为某个已选元素补充修改提示词
+6. 在布局调整模式下，可选择多个元素，并拖拽中心圆点来交换它们的位置
+7. 点击“复制全部”把当前上下文复制到剪贴板
+8. 将内容粘贴到 AI 编辑器中，继续描述你的修改需求
 
-## Current Scope
+## 适合的使用场景
 
-This project is currently a DOM-level MVP. It does not yet include:
+- 告诉 AI 修改某个按钮、输入框、卡片或文本样式
+- 收集多个相关元素，让 AI 一次性做联动调整
+- 把当前页面的真实 DOM 信息整理给 AI，而不是只给截图
+- 在布局模式下表达“这两个元素换位置”或“把这一组内容重新排序”
 
-- source code mapping
-- React/Vue component identification
-- screenshot capture
-- framework-aware component metadata
-- IDE or local dev server integration
+## 当前不足
 
-## Future Ideas
+这个项目现在仍然是一个基于 DOM 的 MVP，已经能覆盖基础的元素选择与布局换位场景，但还有不少限制：
 
-- Copy prompt-ready context templates
-- Capture screenshots alongside DOM data
-- Detect React/Vue component names and props
-- Support lasso or area selection
-- Map selected targets back to local source files
+- 还不能把网页元素直接映射回本地源码文件
+- 还不能识别 React / Vue 组件名、props 或组件层级
+- 还没有内置截图采集能力
+- 还没有框架感知的组件元数据
+- 还没有和 IDE、本地 dev server 做打通
+- 当前布局换位更偏向 DOM 层交换，还不是完整的可视化编排系统
+- 拖拽交互已经有基础跟手反馈，但离设计工具级别的细腻体验还有差距
+
+## 未来展望
+
+- 提供更适合 AI 的 prompt 模板导出
+- 在复制上下文时同时附带截图
+- 识别 React / Vue 组件名、props 和组件边界
+- 支持框选或区域选择
+- 将网页中的选中目标映射回本地源码文件
+- 增强布局调整能力，例如重排、插入、吸附和占位预览
+- 提供更接近 Figma 的拖拽和选中交互体验
+
+## License
+
+本项目基于 `PolyForm Noncommercial 1.0.0` 许可证发布。
+
+你可以在非商业场景下使用、学习和修改本项目，但不能直接将其用于商业用途。
