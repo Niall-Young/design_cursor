@@ -11,7 +11,7 @@
     hoveredTarget: null,
     hoveredSelectedTarget: null,
     selectedTargets: [],
-    selectionMode: "select",
+    selectionMode: "adjust",
     toolbar: null,
     list: null,
     countLabel: null,
@@ -33,6 +33,10 @@
     adjustTarget: null,
     adjustControls: {},
     adjustStyleBaseline: null,
+    adjustLayerSelectionKind: null,
+    adjustLayerSelectionKeys: [],
+    adjustLayerSelectionAnchorKey: null,
+    adjustLayerClipboard: null,
     sizeMenu: null,
     sizeMenuControls: {},
     sizeMenuProp: null,
@@ -58,6 +62,7 @@
     altKeyPressed: false,
     numberDragSession: null,
     dragSession: null,
+    layoutInsertHint: null,
     suppressClickUntil: 0,
     toastTimer: null,
     historyPast: [],
@@ -103,6 +108,19 @@
       <svg class="lucide lucide-copy" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
         <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </svg>
+    `,
+    pipette: `
+      <svg class="lucide lucide-pipette" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m12 9-8.414 8.414A2 2 0 0 0 3 18.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 3.828 21h1.344a2 2 0 0 0 1.414-.586L15 12" />
+        <path d="m18 9 .4.4a1 1 0 1 1-3 3l-3.8-3.8a1 1 0 1 1 3-3l.4.4 3.4-3.4a1 1 0 1 1 3 3z" />
+        <path d="m2 22 .414-.414" />
+      </svg>
+    `,
+    edit: `
+      <svg class="lucide lucide-square-pen" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.375 2.625a1.5 1.5 0 1 1 2.121 2.121L12 13.242l-4 1 1-4Z" />
       </svg>
     `,
     trash: `
@@ -317,14 +335,14 @@
         <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="browse" aria-label="浏览模式" title="浏览模式">
           <span class="chat-context-picker-tool-icon">${icon("browse")}</span>
         </button>
-        <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="select" aria-label="输入模式" title="输入模式">
-          <span class="chat-context-picker-tool-icon">${icon("select")}</span>
+        <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="adjust" aria-label="调整模式" title="调整模式">
+          <span class="chat-context-picker-tool-icon">${icon("layoutSelect")}</span>
         </button>
         <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="layout" aria-label="排版模式" title="排版模式">
           <span class="chat-context-picker-tool-icon">${icon("layout")}</span>
         </button>
-        <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="adjust" aria-label="调整模式" title="调整模式">
-          <span class="chat-context-picker-tool-icon">${icon("layoutSelect")}</span>
+        <button class="chat-context-picker-tool-button" type="button" data-action="set-mode" data-mode="select" aria-label="输入模式" title="输入模式">
+          <span class="chat-context-picker-tool-icon">${icon("select")}</span>
         </button>
         <button class="chat-context-picker-tool-button chat-context-picker-tool-button-list" type="button" data-action="toggle-list" aria-label="查看选择列表" title="查看选择列表">
           <span class="chat-context-picker-tool-icon">${icon("list")}</span>
@@ -649,8 +667,24 @@
 
     popover.addEventListener("click", (event) => {
       event.stopPropagation();
+      const selectionRow = event.target?.closest?.("[data-adjust-selection-key]");
+      const hitSelectionGutter = selectionRow && shouldSelectAdjustLayerRowFromClick(event, selectionRow);
+      if (hitSelectionGutter) {
+        event.preventDefault();
+        selectAdjustLayerRow(selectionRow, { shiftKey: event.shiftKey });
+        return;
+      }
+
       const actionTarget = event.target?.closest?.("[data-action]");
       const segment = event.target?.closest?.("[data-adjust-prop]");
+      const isInteractiveTarget = Boolean(
+        event.target?.closest?.('button, input, textarea, select, label, [contenteditable="true"], [data-adjust-prop], [data-adjust-horizontal][data-adjust-vertical]')
+      );
+
+      if (state.adjustLayerSelectionKeys.length && !isInteractiveTarget && !hitSelectionGutter) {
+        clearAdjustLayerSelection();
+      }
+
       if (segment) {
         applyAdjustControl(segment.dataset.adjustProp, segment.dataset.adjustValue || "", { commit: true });
         return;
@@ -692,10 +726,10 @@
           persistedTarget.adjustFillEnabled = true;
           persistedTarget.adjustFillVisible = true;
           if (!persistedTarget.adjustStoredBackgroundColor) {
-            persistedTarget.adjustStoredBackgroundColor = DEFAULT_FILL_CSS;
+            persistedTarget.adjustStoredBackgroundColor = DEFAULT_BASE_FILL_CSS;
           }
           if (!persistedTarget.adjustStoredBackgroundHex) {
-            persistedTarget.adjustStoredBackgroundHex = DEFAULT_FILL_HEX;
+            persistedTarget.adjustStoredBackgroundHex = DEFAULT_BASE_FILL_HEX;
           }
           applyFillLayerState(persistedTarget);
           syncAdjustPopoverFromTarget(persistedTarget);
@@ -726,8 +760,8 @@
           persistedTarget.adjustFillEnabled = true;
           persistedTarget.adjustFillVisible = true;
           persistedTarget.adjustFillType = "color";
-          persistedTarget.adjustStoredBackgroundColor = DEFAULT_FILL_CSS;
-          persistedTarget.adjustStoredBackgroundHex = DEFAULT_FILL_HEX;
+          persistedTarget.adjustStoredBackgroundColor = DEFAULT_BASE_FILL_CSS;
+          persistedTarget.adjustStoredBackgroundHex = DEFAULT_BASE_FILL_HEX;
           persistedTarget.adjustStoredBackgroundImage = "";
           persistedTarget.adjustFillOverlayLayers = [];
         }
@@ -1156,6 +1190,21 @@
           <div class="chat-context-picker-fill-sv-black"></div>
           <div class="chat-context-picker-fill-sv-thumb" data-fill-marker="sv"></div>
         </div>
+        <div class="chat-context-picker-fill-slider-group">
+          <button class="chat-context-picker-fill-tool-button" type="button" data-action="pick-fill-screen-color" aria-label="从屏幕取色" title="从屏幕取色">
+            <span class="chat-context-picker-fill-tool-icon">${icon("pipette")}</span>
+          </button>
+          <div class="chat-context-picker-fill-slider-stack">
+            <div class="chat-context-picker-fill-slider">
+              <div class="chat-context-picker-fill-slider-track chat-context-picker-fill-slider-track-hue"></div>
+              <input class="chat-context-picker-fill-slider-native" type="range" min="0" max="360" step="1" data-fill-slider-input="hue" aria-label="调整色相" />
+            </div>
+            <div class="chat-context-picker-fill-slider">
+              <div class="chat-context-picker-fill-slider-track chat-context-picker-fill-slider-track-alpha"></div>
+              <input class="chat-context-picker-fill-slider-native" type="range" min="0" max="100" step="1" data-fill-slider-input="alpha" aria-label="调整透明度" />
+            </div>
+          </div>
+        </div>
         <div class="chat-context-picker-fill-format-row">
           <div class="chat-context-picker-fill-format-picker" data-fill-format-picker>
             <button class="chat-context-picker-fill-format-trigger" type="button" data-action="toggle-fill-format-menu" aria-haspopup="menu" aria-expanded="false">
@@ -1219,6 +1268,11 @@
         return;
       }
 
+      if (actionTarget.dataset.action === "pick-fill-screen-color") {
+        pickFillPopoverScreenColor();
+        return;
+      }
+
       if (actionTarget.dataset.fillMode) {
         setFillPopoverMode(actionTarget.dataset.fillMode, { commit: true, sync: true });
         return;
@@ -1260,7 +1314,7 @@
         if (!parsed) {
           return;
         }
-        setActiveFillPopoverColor(parsed, { commit: false, sync: true });
+        setActiveFillPopoverColor(parsed, { commit: false, sync: false });
         return;
       }
 
@@ -1270,18 +1324,28 @@
         if (!parsed) {
           return;
         }
-        setActiveFillPopoverColor(parsed, { commit: false, sync: true });
+        setActiveFillPopoverColor(parsed, { commit: false, sync: false });
         return;
       }
 
       if (input.dataset.fillInput === "alpha") {
-        setActiveFillPopoverColor({ a: clampNumber(input.value, 0, 100, 100) / 100 }, { commit: false, sync: true });
+        setActiveFillPopoverColor({ a: clampNumber(input.value, 0, 100, 100) / 100 }, { commit: false, sync: false });
+        return;
+      }
+
+      if (input.dataset.fillSliderInput === "hue") {
+        setActiveFillPopoverColor({ h: clampNumber(input.value, 0, 360, 0) }, { commit: false, sync: false });
+        return;
+      }
+
+      if (input.dataset.fillSliderInput === "alpha") {
+        setActiveFillPopoverColor({ a: clampNumber(input.value, 0, 100, 100) / 100 }, { commit: false, sync: false });
         return;
       }
 
       if (input.dataset.fillInput === "angle") {
         state.fillPopoverGradientAngle = clampNumber(input.value, -360, 360, 0);
-        applyFillPopoverState({ commit: false, sync: true });
+        applyFillPopoverState({ commit: false, sync: false });
       }
     });
 
@@ -1323,6 +1387,18 @@
         return;
       }
 
+      if (input.dataset.fillSliderInput === "hue") {
+        input.value = String(clampNumber(input.value, 0, 360, 0));
+        setActiveFillPopoverColor({ h: Number.parseFloat(input.value) }, { commit: true, sync: true });
+        return;
+      }
+
+      if (input.dataset.fillSliderInput === "alpha") {
+        input.value = String(clampNumber(input.value, 0, 100, 100));
+        setActiveFillPopoverColor({ a: Number.parseFloat(input.value) / 100 }, { commit: true, sync: true });
+        return;
+      }
+
       if (input.dataset.fillInput === "angle") {
         input.value = String(clampNumber(input.value, -360, 360, 0));
         state.fillPopoverGradientAngle = clampNumber(input.value, -360, 360, 0);
@@ -1345,6 +1421,11 @@
         return;
       }
 
+      const sliderInput = event.target instanceof Element ? event.target.closest("[data-fill-slider-input]") : null;
+      if (sliderInput) {
+        event.stopPropagation();
+      }
+
       const dragTarget = event.target instanceof Element ? event.target.closest("[data-fill-drag]") : null;
       if (!dragTarget) {
         return;
@@ -1365,6 +1446,10 @@
       gradientStopsLayer: popover.querySelector('[data-fill-gradient-stops]'),
       svPanel: popover.querySelector('[data-fill-drag="sv"]'),
       svThumb: popover.querySelector('[data-fill-marker="sv"]'),
+      hueTrack: popover.querySelector('.chat-context-picker-fill-slider-track-hue'),
+      hueInput: popover.querySelector('[data-fill-slider-input="hue"]'),
+      alphaTrack: popover.querySelector('.chat-context-picker-fill-slider-track-alpha'),
+      alphaSliderInput: popover.querySelector('[data-fill-slider-input="alpha"]'),
       angleInput: popover.querySelector('[data-fill-input="angle"]'),
       valueInput: popover.querySelector('[data-fill-text="value"]'),
       tripletField: popover.querySelector('[data-fill-triplet-field]'),
@@ -1740,11 +1825,89 @@
     return truncate(element.innerText || element.textContent || "", 80) || "空内容";
   }
 
+  function getTargetInstructionParts(target) {
+    return {
+      manualPrompt: (target.promptText || "").trim(),
+      layoutPrompt: (target.layoutPromptText || "").trim(),
+      adjustPrompt: (target.adjustPromptText || "").trim()
+    };
+  }
+
+  function getTargetInstructionEntries(target) {
+    const parts = getTargetInstructionParts(target);
+    const entries = [];
+
+    if (parts.manualPrompt) {
+      entries.push({ type: "manual", label: "内容要求", text: parts.manualPrompt });
+    }
+
+    if (parts.layoutPrompt) {
+      entries.push({ type: "layout", label: "排版要求", text: parts.layoutPrompt });
+    }
+
+    if (parts.adjustPrompt) {
+      entries.push({ type: "adjust", label: "调整要求", text: parts.adjustPrompt });
+    }
+
+    return entries;
+  }
+
   function getTargetInstructionText(target) {
-    const manualPrompt = (target.promptText || "").trim();
-    const layoutPrompt = (target.layoutPromptText || "").trim();
-    const adjustPrompt = (target.adjustPromptText || "").trim();
-    return [manualPrompt, layoutPrompt, adjustPrompt].filter(Boolean).join("\n");
+    return getTargetInstructionEntries(target)
+      .map((entry) => entry.text)
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function buildSelectionItemPromptMarkup(target) {
+    const entries = getTargetInstructionEntries(target);
+    if (!entries.length) {
+      return "";
+    }
+
+    const summary = entries
+      .map((entry) => {
+        if (entry.type === "manual") {
+          return "内容变动";
+        }
+        if (entry.type === "layout") {
+          return "排版变动";
+        }
+        if (entry.type === "adjust") {
+          return "调整变动";
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join(" / ");
+
+    return `
+      <div class="chat-context-picker-item-change-summary">${escapeHtml(summary)}</div>
+    `;
+  }
+
+  function buildItemRequirementBlocks(item, isLayoutMode) {
+    const blocks = [];
+
+    if (item.manualPrompt) {
+      blocks.push(["#### 额外内容要求", item.manualPrompt].join("\n"));
+    }
+
+    if (item.layoutPrompt) {
+      blocks.push(["#### 排版模式要求", item.layoutPrompt].join("\n"));
+    }
+
+    if (item.adjustPrompt) {
+      blocks.push(["#### 调整模式要求", item.adjustPrompt].join("\n"));
+    }
+
+    if (blocks.length) {
+      return blocks.join("\n\n");
+    }
+
+    return isLayoutMode
+      ? "该目标用于布局移动/顺序调整，请结合其他已选目标一起理解其移动位置或重排关系。"
+      : "未提供具体修改提示词，请仅参考当前信息。";
   }
 
   function isElementTarget(target) {
@@ -1759,11 +1922,15 @@
       target.kind === "text" ? target.node.textContent || "" : element.innerText || element.textContent || "",
       300
     );
+    const instructionParts = getTargetInstructionParts(target);
 
     return {
       index,
       kind: target.kind,
       promptText: getTargetInstructionText(target),
+      manualPrompt: instructionParts.manualPrompt,
+      layoutPrompt: instructionParts.layoutPrompt,
+      adjustPrompt: instructionParts.adjustPrompt,
       selector: cssPath(element),
       label: getTargetLabel(target),
       role: element.getAttribute("role") || "",
@@ -1820,7 +1987,6 @@
         const rect = mergeRects(getTargetClientRects(target));
         const displayRect = rect || getTargetElement(target).getBoundingClientRect();
         const kindLabel = target.kind === "text" ? "文本片段" : "元素";
-        const previewText = getTargetInstructionText(target) || getTargetPreviewText(target);
 
         return `
           <div class="chat-context-picker-item">
@@ -1835,7 +2001,7 @@
                 </button>
               </div>
             </div>
-            <div class="chat-context-picker-item-preview">${escapeHtml(previewText)}</div>
+            ${buildSelectionItemPromptMarkup(target)}
             <div class="chat-context-picker-item-meta">${kindLabel} · ${Math.round(displayRect.width)} × ${Math.round(displayRect.height)}</div>
             <div class="chat-context-picker-item-meta">${escapeHtml(truncate(cssPath(getTargetElement(target)), 180))}</div>
           </div>
@@ -1872,9 +2038,21 @@
         other &&
         target.kind === other.kind &&
         isSameTarget(target, other) &&
-        (target.promptText || "") === (other.promptText || "")
+        (target.promptText || "") === (other.promptText || "") &&
+        (target.layoutPromptText || "") === (other.layoutPromptText || "") &&
+        (target.adjustPromptText || "") === (other.adjustPromptText || "")
       );
     });
+  }
+
+  function openSelectionItemPrompt(index, anchorRect = null) {
+    pruneSelectedTargets();
+    if (!Number.isInteger(index) || index < 0 || index >= state.selectedTargets.length) {
+      return;
+    }
+
+    closeAdjustPopover();
+    openPromptPopover(state.selectedTargets[index], anchorRect);
   }
 
   function syncHistoryButtons() {
@@ -2031,6 +2209,23 @@
       };
     }
 
+    if (entry.type === "dom-remove") {
+      return {
+        type: "dom-restore",
+        element: entry.element,
+        position: captureElementPosition(entry.element),
+        selectionSnapshot: snapshotSelection()
+      };
+    }
+
+    if (entry.type === "dom-restore") {
+      return {
+        type: "dom-remove",
+        element: entry.element,
+        selectionSnapshot: snapshotSelection()
+      };
+    }
+
     return null;
   }
 
@@ -2098,7 +2293,99 @@
       return true;
     }
 
+    if (entry.type === "dom-remove") {
+      if (entry.element?.parentNode) {
+        entry.element.parentNode.removeChild(entry.element);
+      }
+      if (entry.selectionSnapshot) {
+        restoreSelectionSnapshot(entry.selectionSnapshot);
+      } else {
+        renderSelection();
+        refreshHighlights();
+      }
+      return true;
+    }
+
+    if (entry.type === "dom-restore") {
+      const restored = restoreElementPosition(entry.element, entry.position);
+      if (entry.selectionSnapshot) {
+        restoreSelectionSnapshot(entry.selectionSnapshot);
+      } else {
+        renderSelection();
+        refreshHighlights();
+      }
+      return restored;
+    }
+
     return false;
+  }
+
+  function doesSnapshotContainAnyTarget(snapshot, targets) {
+    if (!Array.isArray(snapshot) || !snapshot.length || !targets.length) {
+      return false;
+    }
+
+    return snapshot.some((snapshotTarget) => targets.some((target) => isSameTarget(snapshotTarget, target)));
+  }
+
+  function isHistoryEntryRelatedToTargets(entry, targets) {
+    if (!entry || !targets.length) {
+      return false;
+    }
+
+    if (doesSnapshotContainAnyTarget(entry.selectionSnapshot, targets)) {
+      return true;
+    }
+
+    const selectedElements = targets
+      .filter(isElementTarget)
+      .map((target) => getTargetElement(target))
+      .filter((element) => element instanceof Element);
+
+    if (!selectedElements.length) {
+      return false;
+    }
+
+    if (entry.type === "style-inline" || entry.type === "dom-move" || entry.type === "dom-remove" || entry.type === "dom-restore") {
+      return selectedElements.includes(entry.element);
+    }
+
+    if (entry.type === "dom-positions") {
+      return entry.positions?.some((item) => selectedElements.includes(item.element)) || false;
+    }
+
+    return false;
+  }
+
+  function revertSelectedTargetChanges(targets) {
+    if (!targets.length || !state.historyPast.length) {
+      return;
+    }
+
+    const revertedIndexes = [];
+
+    for (let index = state.historyPast.length - 1; index >= 0; index -= 1) {
+      const entry = state.historyPast[index];
+      if (!isHistoryEntryRelatedToTargets(entry, targets)) {
+        continue;
+      }
+
+      const reversibleEntry =
+        entry && Object.prototype.hasOwnProperty.call(entry, "selectionSnapshot")
+          ? { ...entry, selectionSnapshot: null }
+          : entry;
+      restoreHistoryEntry(reversibleEntry);
+      revertedIndexes.push(index);
+    }
+
+    if (!revertedIndexes.length) {
+      return;
+    }
+
+    const revertedIndexSet = new Set(revertedIndexes);
+    state.historyPast = state.historyPast.filter((_, index) => !revertedIndexSet.has(index));
+    state.historyFuture = [];
+    syncHistoryButtons();
   }
 
   function undoSelectionHistory() {
@@ -2223,6 +2510,10 @@
 
     if (state.hoveredSelectedTarget && !isLiveTarget(state.hoveredSelectedTarget)) {
       state.hoveredSelectedTarget = null;
+    }
+
+    if (state.layoutInsertHint?.target && !isLiveTarget(state.layoutInsertHint.target)) {
+      state.layoutInsertHint = null;
     }
 
     if (state.dragSession) {
@@ -2445,6 +2736,213 @@
     state.overlayLayer.appendChild(button);
   }
 
+  function getLayoutInsertHintConfig(target) {
+    if (!isElementTarget(target)) {
+      return null;
+    }
+
+    const element = getTargetElement(target);
+    // Duplicate exactly what the user selected instead of promoting to an ancestor layout item.
+    const parent = element?.parentElement || null;
+    const anchorElement = element;
+    if (
+      !(element instanceof Element) ||
+      !(anchorElement instanceof Element) ||
+      !(parent instanceof Element) ||
+      parent === document.body ||
+      parent === document.documentElement ||
+      !isSelectableElement(parent)
+    ) {
+      return null;
+    }
+
+    const axis = getLayoutAxisForContainer(parent);
+    return {
+      element,
+      anchorElement,
+      parent,
+      axis,
+      edges: axis === "x" ? ["left", "right"] : ["top", "bottom"]
+    };
+  }
+
+  function getDistanceToRectEdge(rect, edge, clientX, clientY, threshold) {
+    if (!rect) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    if (edge === "left" || edge === "right") {
+      if (clientY < rect.top - threshold || clientY > rect.bottom + threshold) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(clientX - (edge === "left" ? rect.left : rect.right));
+    }
+
+    if (clientX < rect.left - threshold || clientX > rect.right + threshold) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return Math.abs(clientY - (edge === "top" ? rect.top : rect.bottom));
+  }
+
+  function getLayoutInsertHintForPointer(target, clientX, clientY) {
+    const config = getLayoutInsertHintConfig(target);
+    const rect = mergeRects(getTargetClientRects(target));
+    const threshold = 14;
+    if (
+      !config ||
+      !rect ||
+      clientX < rect.left - threshold ||
+      clientX > rect.right + threshold ||
+      clientY < rect.top - threshold ||
+      clientY > rect.bottom + threshold
+    ) {
+      return null;
+    }
+
+    let matchedEdge = null;
+    let matchedDistance = Number.POSITIVE_INFINITY;
+    for (const edge of config.edges) {
+      const distance = getDistanceToRectEdge(rect, edge, clientX, clientY, threshold);
+      if (distance <= threshold && distance < matchedDistance) {
+        matchedEdge = edge;
+        matchedDistance = distance;
+      }
+    }
+
+    if (!matchedEdge) {
+      return null;
+    }
+
+    return {
+      target: findSelectedTarget(target) || target,
+      edge: matchedEdge
+    };
+  }
+
+  function setLayoutInsertHint(nextHint) {
+    const normalizedHint =
+      nextHint?.target && nextHint?.edge
+        ? {
+            target: findSelectedTarget(nextHint.target) || nextHint.target,
+            edge: nextHint.edge
+          }
+        : null;
+
+    const sameHint =
+      (!normalizedHint && !state.layoutInsertHint) ||
+      (normalizedHint &&
+        state.layoutInsertHint &&
+        normalizedHint.edge === state.layoutInsertHint.edge &&
+        isSameTarget(normalizedHint.target, state.layoutInsertHint.target));
+
+    if (sameHint) {
+      return;
+    }
+
+    state.layoutInsertHint = normalizedHint;
+    refreshHighlights();
+  }
+
+  function getLayoutInsertEdgeLabel(edge) {
+    if (edge === "left") {
+      return "左侧";
+    }
+    if (edge === "right") {
+      return "右侧";
+    }
+    if (edge === "top") {
+      return "上方";
+    }
+    return "下方";
+  }
+
+  function getLayoutInsertButtonPosition(rect, edge) {
+    if (edge === "left") {
+      return { left: rect.left, top: rect.top + rect.height / 2 };
+    }
+    if (edge === "right") {
+      return { left: rect.right, top: rect.top + rect.height / 2 };
+    }
+    if (edge === "top") {
+      return { left: rect.left + rect.width / 2, top: rect.top };
+    }
+    return { left: rect.left + rect.width / 2, top: rect.bottom };
+  }
+
+  function buildDuplicateLayoutPrompt(element, parent, edge) {
+    return `复制${describeElementForLayoutPrompt(element)}，并插入到原元素${getLayoutInsertEdgeLabel(
+      edge
+    )}，遵循${describeContainerForLayoutPrompt(parent)}当前的布局与对齐方式。`;
+  }
+
+  function duplicateLayoutTarget(target, edge) {
+    const persistedTarget = findSelectedTarget(target) || target;
+    const config = getLayoutInsertHintConfig(persistedTarget);
+    if (!config || !config.edges.includes(edge)) {
+      showToast("当前这个元素暂时不能在这个方向复制");
+      return;
+    }
+
+    const sourceElement = config.anchorElement;
+    const referenceNode = edge === "left" || edge === "top" ? sourceElement : sourceElement.nextSibling;
+    const clone = sourceElement.cloneNode(true);
+    if (!(clone instanceof Element)) {
+      showToast("复制失败");
+      return;
+    }
+
+    const previousSelectionSnapshot = snapshotSelection();
+    config.parent.insertBefore(clone, referenceNode);
+    setTargetLayoutPrompt(persistedTarget, buildDuplicateLayoutPrompt(sourceElement, config.parent, edge));
+
+    state.hoveredTarget = null;
+    state.hoveredSelectedTarget = persistedTarget;
+    state.layoutInsertHint = null;
+
+    pushHistoryEntry({
+      type: "dom-remove",
+      element: clone,
+      selectionSnapshot: previousSelectionSnapshot
+    });
+
+    renderSelection();
+    refreshHighlights();
+    showToast(`已在${getLayoutInsertEdgeLabel(edge)}复制一个元素`);
+  }
+
+  function drawLayoutInsertButton(target, edge) {
+    const config = getLayoutInsertHintConfig(target);
+    const rect = mergeRects(getTargetClientRects(target));
+    if (!config || !rect || !config.edges.includes(edge)) {
+      return;
+    }
+
+    const position = getLayoutInsertButtonPosition(rect, edge);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-context-picker-overlay-layout-insert";
+    button.dataset.chatContextPickerUi = "true";
+    button.dataset.edge = edge;
+    button.setAttribute("aria-label", `在${getLayoutInsertEdgeLabel(edge)}复制一个元素`);
+    button.setAttribute("title", `在${getLayoutInsertEdgeLabel(edge)}复制一个元素`);
+    button.style.left = `${position.left}px`;
+    button.style.top = `${position.top}px`;
+    button.innerHTML = icon("plus");
+
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      duplicateLayoutTarget(target, edge);
+    });
+
+    state.overlayLayer.appendChild(button);
+  }
+
   function drawDraggingHandle(clientX, clientY) {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
       return;
@@ -2490,6 +2988,10 @@
         }
       });
 
+      if (!state.dragSession && state.layoutInsertHint?.target && isElementTarget(state.layoutInsertHint.target)) {
+        drawLayoutInsertButton(state.layoutInsertHint.target, state.layoutInsertHint.edge);
+      }
+
       if (state.dragSession) {
         drawDraggingHandle(state.dragSession.clientX, state.dragSession.clientY);
       }
@@ -2497,12 +2999,13 @@
   }
 
   function clearHover() {
-    if (!state.hoveredTarget && !state.hoveredSelectedTarget) {
+    if (!state.hoveredTarget && !state.hoveredSelectedTarget && !state.layoutInsertHint) {
       return;
     }
 
     state.hoveredTarget = null;
     state.hoveredSelectedTarget = null;
+    state.layoutInsertHint = null;
     refreshHighlights();
   }
 
@@ -2594,6 +3097,26 @@
         .map((item) => item.trim())
         .filter((item) => item && item !== "none").length;
       return columns > 1 ? "x" : "y";
+    }
+
+    const childRects = Array.from(container.children)
+      .filter((element) => isSelectableElement(element))
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+
+    if (childRects.length >= 2) {
+      const centerXs = childRects.map((rect) => rect.left + rect.width / 2);
+      const centerYs = childRects.map((rect) => rect.top + rect.height / 2);
+      const spreadX = Math.max(...centerXs) - Math.min(...centerXs);
+      const spreadY = Math.max(...centerYs) - Math.min(...centerYs);
+
+      if (spreadX > spreadY * 1.2) {
+        return "x";
+      }
+
+      if (spreadY > spreadX * 1.2) {
+        return "y";
+      }
     }
 
     return "y";
@@ -2709,6 +3232,7 @@
     }
 
     let current = anchorElement;
+    let fallbackContext = null;
 
     while (current?.parentElement) {
       const parent = current.parentElement;
@@ -2722,20 +3246,26 @@
 
       const styles = window.getComputedStyle(parent);
       const directChildren = getSelectableDirectChildren(parent, draggedElement);
-      const isStructuredContainer =
-        ["flex", "inline-flex", "grid", "inline-grid"].includes(styles.display) ||
-        directChildren.length >= 2;
+      const isPrimaryLayoutContainer = ["flex", "inline-flex", "grid", "inline-grid"].includes(styles.display);
+      const isFallbackStructuredContainer = directChildren.length >= 2;
 
-      if (isStructuredContainer) {
+      if (isPrimaryLayoutContainer) {
         return { parent, anchorChild: current };
+      }
+
+      if (!fallbackContext && isFallbackStructuredContainer) {
+        fallbackContext = { parent, anchorChild: current };
       }
 
       current = parent;
     }
 
-    return anchorElement.parentElement
-      ? { parent: anchorElement.parentElement, anchorChild: anchorElement }
-      : null;
+    return (
+      fallbackContext ||
+      (anchorElement.parentElement
+        ? { parent: anchorElement.parentElement, anchorChild: anchorElement }
+        : null)
+    );
   }
 
   function buildAnchorDropPlan(anchorElement, draggedElement, clientX, clientY) {
@@ -3346,6 +3876,9 @@
   const DEFAULT_FILL_HEX = "#000000";
   const DEFAULT_FILL_ALPHA = 0.2;
   const DEFAULT_FILL_CSS = `rgba(0, 0, 0, ${DEFAULT_FILL_ALPHA})`;
+  const DEFAULT_BASE_FILL_HEX = "#FFFFFF";
+  const DEFAULT_BASE_FILL_ALPHA = 1;
+  const DEFAULT_BASE_FILL_CSS = buildAdjustColorCss(DEFAULT_BASE_FILL_HEX, DEFAULT_BASE_FILL_ALPHA);
   const DEFAULT_FILL_OVERLAY_LAYER = `linear-gradient(${DEFAULT_FILL_CSS}, ${DEFAULT_FILL_CSS})`;
   const DEFAULT_SHADOW_ALPHA = 0.2;
   const DEFAULT_SHADOW_X = 0;
@@ -3417,7 +3950,17 @@
       return null;
     }
 
-    const normalizedHex = normalizeHexColor(value);
+    const rawValue = String(value).trim();
+    const normalizedValue = rawValue.replace(/\s+/g, "").toLowerCase();
+    if (
+      normalizedValue === "transparent" ||
+      normalizedValue === "rgba(0,0,0,0)" ||
+      normalizedValue === "rgb(0,0,0,0)"
+    ) {
+      return null;
+    }
+
+    const normalizedHex = normalizeHexColor(rawValue);
     if (normalizedHex) {
       return {
         css: normalizedHex,
@@ -3427,7 +3970,7 @@
       };
     }
 
-    const match = String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)/i);
+    const match = rawValue.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)/i);
     if (!match) {
       return null;
     }
@@ -3437,6 +3980,9 @@
       .map((item) => Number.parseInt(item, 10).toString(16).padStart(2, "0"))
       .join("")}`;
     const alpha = clampAlpha(match[4], 1);
+    if (alpha <= 0) {
+      return null;
+    }
     const css = alpha >= 1 ? hex : `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
 
     return {
@@ -3772,6 +4318,41 @@
       clampNumber(third, 0, 255, 0),
       alpha
     );
+  }
+
+  function getFillSvThumbPosition(color, format = "hex") {
+    if (format === "hsl") {
+      const hsla = hsvaToHsla(color);
+      return {
+        left: `${clampNumber(hsla.s, 0, 100, 0)}%`,
+        top: `${100 - clampNumber(hsla.l, 0, 100, 0)}%`
+      };
+    }
+
+    return {
+      left: `${clampNumber(color?.s, 0, 100, 0)}%`,
+      top: `${100 - clampNumber(color?.v, 0, 100, 0)}%`
+    };
+  }
+
+  function getFillSvDragColor(baseColor, xRatio, yRatio, format = "hex") {
+    const normalizedX = clampNumber(xRatio, 0, 1, 0);
+    const normalizedY = clampNumber(yRatio, 0, 1, 0);
+
+    if (format === "hsl") {
+      const hsla = hsvaToHsla(baseColor);
+      return hslaToHsva(
+        hsla.h,
+        normalizedX * 100,
+        100 - normalizedY * 100,
+        clampAlpha(baseColor?.a, 1)
+      );
+    }
+
+    return {
+      s: normalizedX * 100,
+      v: 100 - normalizedY * 100
+    };
   }
 
   function normalizeGradientStop(stop, fallbackColor = null, fallbackPosition = 0) {
@@ -4134,7 +4715,7 @@
 
   function getFillBaseRowMarkup(isActive = false, isVisible = true) {
     return `
-      <div class="chat-context-picker-adjust-style-row chat-context-picker-adjust-fill-row" data-adjust-row="fill" data-state="${isActive ? "active" : "default"}">
+      <div class="chat-context-picker-adjust-style-row chat-context-picker-adjust-fill-row" data-adjust-row="fill" data-adjust-selection-kind="fill" data-adjust-selection-key="fill:base" data-state="${isActive ? "active" : "default"}">
         <span class="chat-context-picker-adjust-fill-prefix">
           <button class="chat-context-picker-adjust-swatch-button" type="button" data-action="open-fill-picker" aria-label="选择填充颜色" title="选择填充颜色">
             <span class="chat-context-picker-adjust-swatch" data-adjust-swatch="backgroundColor"></span>
@@ -4164,7 +4745,7 @@
     const colorHex = layer?.colorHex || DEFAULT_FILL_HEX;
     const colorCss = layer?.colorCss || DEFAULT_FILL_CSS;
     return `
-      <div class="chat-context-picker-adjust-style-row chat-context-picker-adjust-fill-row" data-adjust-row="fill-overlay" data-overlay-index="${index}" data-state="${isActive ? "active" : "default"}" data-visible="${visible ? "true" : "false"}">
+      <div class="chat-context-picker-adjust-style-row chat-context-picker-adjust-fill-row" data-adjust-row="fill-overlay" data-adjust-selection-kind="fill" data-adjust-selection-key="fill:overlay:${index}" data-overlay-index="${index}" data-state="${isActive ? "active" : "default"}" data-visible="${visible ? "true" : "false"}">
         <span class="chat-context-picker-adjust-fill-prefix">
           <button class="chat-context-picker-adjust-swatch-button" type="button" data-action="open-fill-overlay-picker" data-overlay-index="${index}" aria-label="选择叠加填充颜色" title="选择叠加填充颜色">
             <span class="chat-context-picker-adjust-swatch" style="--swatch-color:${colorCss}; border-color: transparent;"></span>
@@ -4193,7 +4774,7 @@
     const isInner = shadowType === "inner";
     const label = isInner ? "内阴影" : "外阴影";
     return `
-      <div class="chat-context-picker-adjust-style-row" data-action="set-shadow-type" data-shadow-type="${shadowType}" data-adjust-row="shadow-${shadowType}" data-state="${isActive ? "active" : "default"}" role="button" tabindex="0">
+      <div class="chat-context-picker-adjust-style-row" data-action="set-shadow-type" data-shadow-type="${shadowType}" data-adjust-row="shadow-${shadowType}" data-adjust-selection-kind="shadow" data-adjust-selection-key="shadow:base:${shadowType}" data-state="${isActive ? "active" : "default"}" role="button" tabindex="0">
         <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
         <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
         <div class="chat-context-picker-adjust-style-label">${label}</div>
@@ -4212,7 +4793,7 @@
     const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "inner" : "outer";
     const label = shadowType === "inner" ? "内阴影" : "外阴影";
     return `
-      <div class="chat-context-picker-adjust-style-row" data-action="open-shadow-overlay" data-shadow-type="${shadowType}" data-adjust-row="shadow-overlay" data-overlay-index="${index}" data-state="${isActive ? "active" : "default"}" data-visible="${visible ? "true" : "false"}" role="button" tabindex="0">
+      <div class="chat-context-picker-adjust-style-row" data-action="open-shadow-overlay" data-shadow-type="${shadowType}" data-adjust-row="shadow-overlay" data-adjust-selection-kind="shadow" data-adjust-selection-key="shadow:overlay:${index}" data-overlay-index="${index}" data-state="${isActive ? "active" : "default"}" data-visible="${visible ? "true" : "false"}" role="button" tabindex="0">
         <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
         <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
         <div class="chat-context-picker-adjust-style-label">${label}</div>
@@ -4248,6 +4829,360 @@
     };
   }
 
+  function getAdjustLayerSelectableRows(kind = null) {
+    if (!state.adjustPopover) {
+      return [];
+    }
+
+    const selector = kind
+      ? `[data-adjust-selection-key][data-adjust-selection-kind="${kind}"]`
+      : "[data-adjust-selection-key]";
+    return [...state.adjustPopover.querySelectorAll(selector)];
+  }
+
+  function syncAdjustLayerRowSelection() {
+    if (!state.adjustPopover) {
+      return;
+    }
+
+    const selectedKeys = new Set(state.adjustLayerSelectionKeys || []);
+    getAdjustLayerSelectableRows().forEach((row) => {
+      row.dataset.selected = selectedKeys.has(row.dataset.adjustSelectionKey) ? "true" : "false";
+    });
+  }
+
+  function clearAdjustLayerSelection() {
+    state.adjustLayerSelectionKind = null;
+    state.adjustLayerSelectionKeys = [];
+    state.adjustLayerSelectionAnchorKey = null;
+    syncAdjustLayerRowSelection();
+  }
+
+  function pruneAdjustLayerSelection() {
+    const kind = state.adjustLayerSelectionKind;
+    if (!kind) {
+      syncAdjustLayerRowSelection();
+      return;
+    }
+
+    const availableKeys = new Set(
+      getAdjustLayerSelectableRows(kind).map((row) => row.dataset.adjustSelectionKey).filter(Boolean)
+    );
+    state.adjustLayerSelectionKeys = (state.adjustLayerSelectionKeys || []).filter((key) => availableKeys.has(key));
+    if (!state.adjustLayerSelectionKeys.length) {
+      clearAdjustLayerSelection();
+      return;
+    }
+
+    if (!availableKeys.has(state.adjustLayerSelectionAnchorKey)) {
+      state.adjustLayerSelectionAnchorKey = state.adjustLayerSelectionKeys[state.adjustLayerSelectionKeys.length - 1] || null;
+    }
+    syncAdjustLayerRowSelection();
+  }
+
+  function setAdjustLayerSelection(kind, keys, anchorKey = null) {
+    const normalizedKeys = [...new Set((keys || []).filter(Boolean))];
+    if (!kind || !normalizedKeys.length) {
+      clearAdjustLayerSelection();
+      return;
+    }
+
+    state.adjustLayerSelectionKind = kind;
+    state.adjustLayerSelectionKeys = normalizedKeys;
+    state.adjustLayerSelectionAnchorKey = anchorKey || normalizedKeys[normalizedKeys.length - 1] || null;
+    pruneAdjustLayerSelection();
+  }
+
+  function getOrderedAdjustLayerSelectionKeys(kind = state.adjustLayerSelectionKind) {
+    if (!kind || !state.adjustLayerSelectionKeys.length) {
+      return [];
+    }
+
+    const selected = new Set(state.adjustLayerSelectionKeys);
+    return getAdjustLayerSelectableRows(kind)
+      .map((row) => row.dataset.adjustSelectionKey)
+      .filter((key) => key && selected.has(key));
+  }
+
+  function shouldSelectAdjustLayerRowFromClick(event, row) {
+    if (!row) {
+      return false;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    if (
+      target.closest(
+        'button, input, textarea, select, label, [contenteditable="true"], [data-adjust-text], [data-adjust-alpha], [data-adjust-overlay-text], [data-adjust-overlay-alpha]'
+      )
+    ) {
+      return false;
+    }
+
+    const rect = row.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const gutterWidth = Math.min(24, Math.max(16, rect.width * 0.075));
+    return localX <= gutterWidth || localX >= rect.width - gutterWidth;
+  }
+
+  function selectAdjustLayerRow(row, { shiftKey = false } = {}) {
+    if (!(row instanceof Element)) {
+      return;
+    }
+
+    const kind = row.dataset.adjustSelectionKind || null;
+    const key = row.dataset.adjustSelectionKey || null;
+    if (!kind || !key) {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      state.adjustPopover?.contains(activeElement) &&
+      (activeElement.matches("input, textarea, select") || activeElement.isContentEditable)
+    ) {
+      activeElement.blur();
+    }
+
+    const rows = getAdjustLayerSelectableRows(kind);
+    if (!rows.length) {
+      return;
+    }
+
+    if (shiftKey && state.adjustLayerSelectionKind === kind) {
+      const nextKeys = new Set(state.adjustLayerSelectionKeys || []);
+      nextKeys.add(key);
+      setAdjustLayerSelection(kind, [...nextKeys], key);
+      return;
+    }
+
+    setAdjustLayerSelection(kind, [key], key);
+  }
+
+  function cloneFillOverlayLayer(layer) {
+    return {
+      visible: layer?.visible !== false,
+      colorHex: layer?.colorHex || DEFAULT_FILL_HEX,
+      colorCss: layer?.colorCss || DEFAULT_FILL_CSS
+    };
+  }
+
+  function createFillLayerFromClipboardEntry(entry) {
+    if (!entry) {
+      return cloneFillOverlayLayer(null);
+    }
+
+    if (entry.role === "overlay" && entry.layer) {
+      return cloneFillOverlayLayer(entry.layer);
+    }
+
+    return {
+      visible: entry.visible !== false,
+      colorHex: entry.colorHex || DEFAULT_BASE_FILL_HEX,
+      colorCss: entry.colorCss || DEFAULT_BASE_FILL_CSS
+    };
+  }
+
+  function cloneShadowConfig(config, shadowType = "outer") {
+    const normalized = config || getDefaultShadowConfig(shadowType);
+    return {
+      type: shadowType,
+      x: Number.isFinite(Number(normalized.x)) ? Number(normalized.x) : 0,
+      y: Number.isFinite(Number(normalized.y)) ? Number(normalized.y) : 4,
+      blur: Number.isFinite(Number(normalized.blur)) ? Number(normalized.blur) : 16,
+      spread: Number.isFinite(Number(normalized.spread)) ? Number(normalized.spread) : 0,
+      color: normalized.color || DEFAULT_FILL_CSS
+    };
+  }
+
+  function cloneShadowLayer(layer) {
+    const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "inner" : "outer";
+    return normalizeShadowLayerEntry(
+      {
+        type: shadowType,
+        visible: layer?.visible !== false,
+        config: cloneShadowConfig(layer?.config, shadowType)
+      },
+      shadowType
+    );
+  }
+
+  function buildAdjustLayerClipboardData() {
+    if (!state.adjustTarget || !state.adjustLayerSelectionKind || !state.adjustLayerSelectionKeys.length) {
+      return null;
+    }
+
+    const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
+    if (!persistedTarget) {
+      return null;
+    }
+
+    if (state.adjustLayerSelectionKind === "fill") {
+      const entries = [];
+      getOrderedAdjustLayerSelectionKeys("fill").forEach((key) => {
+        if (key === "fill:base" && persistedTarget.adjustFillEnabled) {
+          entries.push({
+            role: "base",
+            visible: persistedTarget.adjustFillVisible !== false,
+            fillType: persistedTarget.adjustFillType || "color",
+            colorCss: persistedTarget.adjustStoredBackgroundColor || DEFAULT_BASE_FILL_CSS,
+            colorHex: persistedTarget.adjustStoredBackgroundHex || DEFAULT_BASE_FILL_HEX,
+            backgroundImage: persistedTarget.adjustStoredBackgroundImage || ""
+          });
+          return;
+        }
+
+        if (key.startsWith("fill:overlay:")) {
+          const index = Number.parseInt(key.split(":").pop() || "-1", 10);
+          const layer = persistedTarget.adjustFillOverlayLayers?.[index];
+          if (layer) {
+            entries.push({
+              role: "overlay",
+              layer: cloneFillOverlayLayer(layer)
+            });
+          }
+        }
+      });
+
+      return entries.length ? { kind: "fill", entries } : null;
+    }
+
+    if (state.adjustLayerSelectionKind === "shadow") {
+      const entries = [];
+      getOrderedAdjustLayerSelectionKeys("shadow").forEach((key) => {
+        if (key.startsWith("shadow:overlay:")) {
+          const index = Number.parseInt(key.split(":").pop() || "-1", 10);
+          const layer = persistedTarget.adjustAddedOuterShadowLayers?.[index];
+          if (layer) {
+            entries.push(cloneShadowLayer(layer));
+          }
+        }
+      });
+
+      return entries.length ? { kind: "shadow", entries } : null;
+    }
+
+    return null;
+  }
+
+  function copyAdjustLayerSelection() {
+    const clipboardData = buildAdjustLayerClipboardData();
+    if (!clipboardData) {
+      showToast("请先选中颜色层或阴影层");
+      return false;
+    }
+
+    state.adjustLayerClipboard = clipboardData;
+    const label = clipboardData.kind === "fill" ? "颜色层" : "阴影层";
+    showToast(`已复制${clipboardData.entries.length}个${label}`);
+    return true;
+  }
+
+  function pasteAdjustLayerSelection() {
+    if (!state.adjustTarget || !state.adjustLayerClipboard) {
+      showToast("当前没有可粘贴的图层");
+      return false;
+    }
+
+    const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
+    if (!persistedTarget) {
+      return false;
+    }
+
+    if (state.adjustLayerClipboard.kind === "fill") {
+      const clipboardEntries = state.adjustLayerClipboard.entries || [];
+      if (!clipboardEntries.length) {
+        return false;
+      }
+
+      const targetHasFill =
+        persistedTarget.adjustFillEnabled ||
+        Boolean((persistedTarget.adjustFillOverlayLayers || []).length);
+      const pastedOverlayLayers = [];
+      let shouldSelectBase = false;
+
+      if (!targetHasFill) {
+        const baseIndex = clipboardEntries.length - 1;
+        const baseEntry = clipboardEntries[baseIndex];
+        const baseLayer = createFillLayerFromClipboardEntry(baseEntry);
+
+        persistedTarget.adjustFillEnabled = true;
+        persistedTarget.adjustFillVisible = baseEntry?.visible !== false;
+        persistedTarget.adjustFillType = baseEntry?.role === "base" ? (baseEntry.fillType || "color") : "color";
+        persistedTarget.adjustStoredBackgroundColor = baseLayer.colorCss || DEFAULT_BASE_FILL_CSS;
+        persistedTarget.adjustStoredBackgroundHex = baseLayer.colorHex || DEFAULT_BASE_FILL_HEX;
+        persistedTarget.adjustStoredBackgroundImage =
+          baseEntry?.role === "base" && baseEntry.fillType === "gradient" ? (baseEntry.backgroundImage || "") : "";
+        shouldSelectBase = true;
+
+        clipboardEntries.forEach((entry, index) => {
+          if (index === baseIndex) {
+            return;
+          }
+          pastedOverlayLayers.push(createFillLayerFromClipboardEntry(entry));
+        });
+      } else {
+        clipboardEntries.forEach((entry) => {
+          pastedOverlayLayers.push(createFillLayerFromClipboardEntry(entry));
+        });
+      }
+
+      if (pastedOverlayLayers.length) {
+        persistedTarget.adjustFillOverlayLayers = [
+          ...pastedOverlayLayers,
+          ...(persistedTarget.adjustFillOverlayLayers || [])
+        ];
+      }
+
+      applyFillLayerState(persistedTarget);
+      refreshAdjustPromptText(persistedTarget);
+      syncAdjustPopoverFromTarget(persistedTarget);
+      renderSelection();
+      commitAdjustChanges();
+      setAdjustLayerSelection(
+        "fill",
+        [
+          ...pastedOverlayLayers.map((_, index) => `fill:overlay:${index}`),
+          ...(shouldSelectBase ? ["fill:base"] : [])
+        ],
+        pastedOverlayLayers.length ? `fill:overlay:${pastedOverlayLayers.length - 1}` : shouldSelectBase ? "fill:base" : null
+      );
+      showToast(`已粘贴${state.adjustLayerClipboard.entries.length}个颜色层`);
+      return true;
+    }
+
+    if (state.adjustLayerClipboard.kind === "shadow") {
+      const layers = state.adjustLayerClipboard.entries.map((entry) => cloneShadowLayer(entry));
+      if (!layers.length) {
+        return false;
+      }
+
+      persistedTarget.adjustAddedOuterShadowLayers = [
+        ...layers,
+        ...(persistedTarget.adjustAddedOuterShadowLayers || [])
+      ];
+      persistedTarget.adjustShadowActiveLayer = layers[0]?.type || persistedTarget.adjustShadowActiveLayer || "outer";
+      applyShadowLayerState(persistedTarget);
+      refreshAdjustPromptText(persistedTarget);
+      syncAdjustPopoverFromTarget(persistedTarget);
+      renderSelection();
+      commitAdjustChanges();
+      setAdjustLayerSelection(
+        "shadow",
+        layers.map((_, index) => `shadow:overlay:${index}`),
+        layers.length ? `shadow:overlay:${layers.length - 1}` : null
+      );
+      showToast(`已粘贴${layers.length}个阴影层`);
+      return true;
+    }
+
+    return false;
+  }
+
   function renderAdjustLayerRows(target) {
     const persistedTarget = ensureAdjustLayerState(target);
     if (!persistedTarget || !state.adjustControls) {
@@ -4255,17 +5190,23 @@
     }
 
     const fillLayers = persistedTarget.adjustFillOverlayLayers || [];
+    const hasBaseFill = persistedTarget.adjustFillEnabled;
+    const hasAnyFillLayer = hasBaseFill || fillLayers.length > 0;
     const isFillPopoverOpen = Boolean(state.fillPopover?.dataset.open === "true" && state.adjustTarget);
     if (state.adjustControls.fillStack) {
       state.adjustControls.fillStack.innerHTML = [
         ...fillLayers.map((layer, index) =>
           getFillOverlayRowMarkup(layer, index, isFillPopoverOpen && state.fillPopoverOverlayIndex === index)
         ),
-        getFillBaseRowMarkup(
-          isFillPopoverOpen && state.fillPopoverOverlayIndex === null,
-          persistedTarget.adjustFillVisible !== false
-        )
+        ...(hasBaseFill
+          ? [getFillBaseRowMarkup(
+              isFillPopoverOpen && state.fillPopoverOverlayIndex === null,
+              persistedTarget.adjustFillVisible !== false
+            )]
+          : [])
       ].join("");
+      state.adjustControls.fillStack.dataset.empty = hasAnyFillLayer ? "false" : "true";
+      state.adjustControls.fillStack.hidden = !hasAnyFillLayer;
     }
 
     const shadowOverlayLayers = persistedTarget.adjustAddedOuterShadowLayers || [];
@@ -4285,6 +5226,7 @@
     }
 
     refreshAdjustPopoverControlRefs();
+    pruneAdjustLayerSelection();
   }
 
   function captureAdjustableStyleSnapshot(element) {
@@ -4391,6 +5333,21 @@
     persistedTarget.adjustShadowActiveLayer = persistedTarget.adjustAddedOuterShadowLayers[0]?.type || "outer";
 
     return persistedTarget;
+  }
+
+  function hasPersistedAdjustLayerState(target) {
+    return Boolean(
+      target &&
+      (
+        typeof target.adjustFillEnabled === "boolean" ||
+        typeof target.adjustFillVisible === "boolean" ||
+        Array.isArray(target.adjustFillOverlayLayers) ||
+        typeof target.adjustFillType === "string" ||
+        Array.isArray(target.adjustAddedOuterShadowLayers) ||
+        target.adjustStoredBackgroundColor !== undefined ||
+        target.adjustStoredBackgroundImage !== undefined
+      )
+    );
   }
 
   function ensureAdjustLayerState(target, values = null) {
@@ -4816,6 +5773,10 @@
     const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
     persistedTarget.adjustFillEnabled = false;
     persistedTarget.adjustFillVisible = false;
+    persistedTarget.adjustFillType = "none";
+    persistedTarget.adjustStoredBackgroundColor = "";
+    persistedTarget.adjustStoredBackgroundHex = "";
+    persistedTarget.adjustStoredBackgroundImage = "";
     persistedTarget.adjustFillOverlayLayers = [];
     closeFillPopover();
     applyFillLayerState(persistedTarget);
@@ -4923,8 +5884,7 @@
         ? clampNumber(state.fillPopoverGradientActiveStop, 0, Math.max(0, gradientStops.length - 1), 0)
         : 0;
     const activeColor = mode === "gradient" ? cloneHsvaColor(gradientStops[activeStopIndex]) : cloneHsvaColor(solidColor);
-    const satLeft = `${Math.min(100, Math.max(0, activeColor.s))}%`;
-    const satTop = `${100 - Math.min(100, Math.max(0, activeColor.v))}%`;
+    const svThumbPosition = getFillSvThumbPosition(activeColor, state.fillPopoverFormat);
     state.fillPopoverGradientStops = gradientStops;
     state.fillPopoverGradientActiveStop = activeStopIndex;
     state.fillControls.modeSolid.dataset.state = mode === "solid" ? "active" : "inactive";
@@ -4973,11 +5933,46 @@
     }
 
     if (state.fillControls.svPanel) {
-      state.fillControls.svPanel.style.backgroundColor = `hsl(${Math.round(activeColor.h)} 100% 50%)`;
+      state.fillControls.svPanel.dataset.colorFormat = state.fillPopoverFormat;
+      if (state.fillPopoverFormat === "hsl") {
+        state.fillControls.svPanel.style.backgroundColor = "transparent";
+        state.fillControls.svPanel.style.setProperty(
+          "--chat-fill-hsl-neutral",
+          `hsl(${Math.round(activeColor.h)} 0% 50%)`
+        );
+        state.fillControls.svPanel.style.setProperty(
+          "--chat-fill-hsl-saturated",
+          `hsl(${Math.round(activeColor.h)} 100% 50%)`
+        );
+      } else {
+        state.fillControls.svPanel.style.backgroundColor = `hsl(${Math.round(activeColor.h)} 100% 50%)`;
+        state.fillControls.svPanel.style.removeProperty("--chat-fill-hsl-neutral");
+        state.fillControls.svPanel.style.removeProperty("--chat-fill-hsl-saturated");
+      }
     }
     if (state.fillControls.svThumb) {
-      state.fillControls.svThumb.style.left = satLeft;
-      state.fillControls.svThumb.style.top = satTop;
+      state.fillControls.svThumb.style.left = svThumbPosition.left;
+      state.fillControls.svThumb.style.top = svThumbPosition.top;
+    }
+    if (state.fillControls.hueInput) {
+      if (document.activeElement !== state.fillControls.hueInput) {
+        state.fillControls.hueInput.value = String(Math.round((((activeColor.h % 360) + 360) % 360)));
+      }
+    }
+    if (state.fillControls.hueTrack) {
+      state.fillControls.hueTrack.style.setProperty("--chat-fill-hue-active", `hsl(${Math.round(activeColor.h)} 100% 50%)`);
+    }
+    if (state.fillControls.alphaTrack) {
+      const { red, green, blue } = hsvaToRgb({ ...activeColor, a: 1 });
+      state.fillControls.alphaTrack.style.setProperty(
+        "--chat-fill-alpha-gradient",
+        `linear-gradient(90deg, rgba(${red}, ${green}, ${blue}, 0) 0%, rgba(${red}, ${green}, ${blue}, 1) 100%)`
+      );
+    }
+    if (state.fillControls.alphaSliderInput) {
+      if (document.activeElement !== state.fillControls.alphaSliderInput) {
+        state.fillControls.alphaSliderInput.value = String(Math.round(clampAlpha(activeColor.a, 1) * 100));
+      }
     }
     if (state.fillControls.formatLabel) {
       state.fillControls.formatLabel.textContent =
@@ -5009,7 +6004,9 @@
       state.fillControls.valueInput.hidden = !showSingleValue;
       state.fillControls.valueInput.style.display = showSingleValue ? "" : "none";
       if (showSingleValue) {
-        state.fillControls.valueInput.value = formatFillPopoverColorValue(activeColor, state.fillPopoverFormat);
+        if (document.activeElement !== state.fillControls.valueInput) {
+          state.fillControls.valueInput.value = formatFillPopoverColorValue(activeColor, state.fillPopoverFormat);
+        }
         state.fillControls.valueInput.placeholder = "EE0F0F";
       }
     }
@@ -5032,7 +6029,9 @@
                 { min: "0", max: "255", step: "1", placeholder: "255" }
               ];
         state.fillControls.tripletInputs.forEach((field, index) => {
-          field.value = String(tripletValues[index] ?? "");
+          if (document.activeElement !== field) {
+            field.value = String(tripletValues[index] ?? "");
+          }
           field.min = tripletConfig[index].min;
           field.max = tripletConfig[index].max;
           field.step = tripletConfig[index].step;
@@ -5041,17 +6040,42 @@
       }
     }
     if (state.fillControls.alphaInput) {
-      state.fillControls.alphaInput.value = String(Math.round(clampAlpha(activeColor.a, 1) * 100));
+      if (document.activeElement !== state.fillControls.alphaInput) {
+        state.fillControls.alphaInput.value = String(Math.round(clampAlpha(activeColor.a, 1) * 100));
+      }
     }
 
-    if (state.fillPopover?.dataset.open === "true") {
-      requestAnimationFrame(() => {
-        const anchorRect = getFillPopoverAnchorRect();
-        if (anchorRect) {
-          state.fillPopoverAnchorRect = anchorRect;
-          positionFillPopover(anchorRect);
-        }
-      });
+  }
+
+  async function pickFillPopoverScreenColor() {
+    const EyeDropperCtor = window.EyeDropper || globalThis.EyeDropper;
+    if (!EyeDropperCtor) {
+      showToast("当前浏览器暂不支持取色工具");
+      return;
+    }
+
+    try {
+      const eyeDropper = new EyeDropperCtor();
+      const result = await eyeDropper.open();
+      if (!result?.sRGBHex) {
+        return;
+      }
+
+      const currentColor = getActiveFillPopoverColor() || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 };
+      const nextColor = colorStringToHsva(result.sRGBHex, currentColor);
+      if (!nextColor) {
+        showToast("取色失败");
+        return;
+      }
+
+      setActiveFillPopoverColor({ ...nextColor, a: currentColor.a }, { commit: true, sync: true });
+      showToast("已吸取颜色");
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+      showToast("取色失败");
+      console.error("EyeDropper failed", error);
     }
   }
 
@@ -5147,7 +6171,12 @@
       syncFillPopoverFromTarget(persistedTarget);
       syncAdjustPopoverFromTarget(persistedTarget);
     }
-    renderSelection();
+    if (sync || commit) {
+      renderSelection();
+    }
+    if (!sync && state.fillPopover?.dataset.open === "true") {
+      renderFillPopoverControls();
+    }
 
     if (commit) {
       commitAdjustChanges();
@@ -5255,11 +6284,54 @@
       return;
     }
 
+    if (event.target instanceof Element && typeof event.target.setPointerCapture === "function") {
+      try {
+        event.target.setPointerCapture(event.pointerId);
+      } catch (error) {
+        console.warn("setPointerCapture failed", error);
+      }
+    }
+
     state.fillPopoverDragSession = {
       type,
+      managedLocally: true,
       pointerId: event.pointerId,
-      stopIndex: Number.isInteger(extras.stopIndex) ? extras.stopIndex : null
+      stopIndex: Number.isInteger(extras.stopIndex) ? extras.stopIndex : null,
+      cleanup: null
     };
+
+    const handleMove = (nextEvent) => {
+      if (!state.fillPopoverDragSession) {
+        return;
+      }
+      if (state.fillPopoverDragSession.pointerId !== nextEvent.pointerId) {
+        return;
+      }
+      nextEvent.preventDefault();
+      updateFillPopoverDrag(nextEvent, false);
+    };
+
+    const handleUp = (nextEvent) => {
+      if (!state.fillPopoverDragSession) {
+        return;
+      }
+      if (state.fillPopoverDragSession.pointerId !== nextEvent.pointerId) {
+        return;
+      }
+      nextEvent.preventDefault();
+      finishFillPopoverDrag(nextEvent);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handleMove, true);
+      window.removeEventListener("pointerup", handleUp, true);
+      window.removeEventListener("pointercancel", handleUp, true);
+    };
+
+    state.fillPopoverDragSession.cleanup = cleanup;
+    window.addEventListener("pointermove", handleMove, true);
+    window.addEventListener("pointerup", handleUp, true);
+    window.addEventListener("pointercancel", handleUp, true);
     updateFillPopoverDrag(event, false);
   }
 
@@ -5275,9 +6347,10 @@
 
     if (state.fillPopoverDragSession.type === "sv" && state.fillControls.svPanel) {
       const rect = state.fillControls.svPanel.getBoundingClientRect();
-      const s = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100));
-      const v = Math.min(100, Math.max(0, 100 - ((event.clientY - rect.top) / rect.height) * 100));
-      setActiveFillPopoverColor({ s, v }, { commit, sync: true });
+      const xRatio = (event.clientX - rect.left) / rect.width;
+      const yRatio = (event.clientY - rect.top) / rect.height;
+      const nextColor = getFillSvDragColor(activeColor, xRatio, yRatio, state.fillPopoverFormat);
+      setActiveFillPopoverColor(nextColor, { commit, sync: true });
       return true;
     }
 
@@ -5311,6 +6384,9 @@
       return false;
     }
 
+    if (typeof state.fillPopoverDragSession.cleanup === "function") {
+      state.fillPopoverDragSession.cleanup();
+    }
     updateFillPopoverDrag(event, true);
     state.fillPopoverDragSession = null;
     return true;
@@ -6079,9 +7155,14 @@
     closeShadowPopover();
 
     const persistedTarget = findSelectedTarget(target) || target;
-    hydrateAdjustLayerState(persistedTarget);
+    if (!hasPersistedAdjustLayerState(persistedTarget)) {
+      hydrateAdjustLayerState(persistedTarget);
+    } else {
+      ensureAdjustLayerState(persistedTarget);
+    }
     state.adjustTarget = persistedTarget;
     state.adjustStyleBaseline = captureAdjustableStyleSnapshot(getTargetElement(persistedTarget));
+    clearAdjustLayerSelection();
     syncAdjustPopoverFromTarget(persistedTarget);
     positionAdjustPopover(persistedTarget, anchorRect);
     state.adjustPopover.dataset.open = "true";
@@ -6102,6 +7183,7 @@
     state.adjustPopover.dataset.open = "false";
     state.adjustTarget = null;
     state.adjustStyleBaseline = null;
+    clearAdjustLayerSelection();
     refreshHighlights();
   }
 
@@ -6405,14 +7487,15 @@
     }
 
     const previous = snapshotSelection();
+    closePromptPopover();
+    closeAdjustPopover();
+    revertSelectedTargetChanges(previous);
     state.selectedTargets = [];
     state.hoveredTarget = null;
     state.hoveredSelectedTarget = null;
     pushSelectionHistory(previous);
     renderSelection();
     refreshHighlights();
-    closePromptPopover();
-    closeAdjustPopover();
     showToast("已清空选择");
   }
 
@@ -6480,13 +7563,22 @@
 
   function buildClipboardPayloadForTargets(targets) {
     const items = targets.map((target, index) => targetToContext(target, index + 1));
-    const isLayoutMode = state.selectionMode === "layout";
+    const isLayoutMode = state.selectionMode === "layout" || items.some((item) => item.layoutPrompt);
+    const hasAdjustInstructions = items.some((item) => item.adjustPrompt);
     const layoutSummary = isLayoutMode
       ? [
           "### 布局调整说明",
           "- 当前任务类型：移动已选元素的位置 / 调整这些元素的排列顺序",
           `- 当前选中顺序：${items.map((item) => `目标 ${item.index}`).join(" -> ") || "无"}`,
           "- 如果没有额外提示词，默认优先理解为对这些目标做移动位置或重排，而不是仅修改样式",
+          ""
+        ]
+      : [];
+    const adjustSummary = hasAdjustInstructions
+      ? [
+          "### 调整模式说明",
+          "- 带有“调整模式要求”的目标，已经包含具体的样式调整参数。",
+          "- 请优先按这些明确参数修改尺寸、对齐、圆角、填充、阴影等视觉属性。",
           ""
         ]
       : [];
@@ -6501,6 +7593,7 @@
       "请严格基于下面每个目标元素的当前信息与修改要求进行 UI 调整。",
       "",
       ...layoutSummary,
+      ...adjustSummary,
       ...items.map((item) => [
         `## 目标 ${item.index}：${item.label}`,
         "",
@@ -6522,10 +7615,7 @@
         "```",
         "",
         "### 修改要求",
-        item.promptText ||
-          (isLayoutMode
-            ? "该目标用于布局移动/顺序调整，请结合其他已选目标一起理解其移动位置或重排关系。"
-            : "未提供具体修改提示词，请仅参考当前信息。")
+        buildItemRequirementBlocks(item, isLayoutMode)
       ].join("\n"))
     ].join("\n");
   }
@@ -6573,9 +7663,15 @@
       return;
     }
 
+    if (isAdjustOpen()) {
+      return;
+    }
+
     if (state.fillPopoverDragSession) {
-      event.preventDefault();
-      updateFillPopoverDrag(event, false);
+      if (!state.fillPopoverDragSession.managedLocally) {
+        event.preventDefault();
+        updateFillPopoverDrag(event, false);
+      }
       return;
     }
 
@@ -6623,13 +7719,21 @@
       return;
     }
 
-    const target = normalizeSelectableTarget(event.target, event.clientX, event.clientY);
+    const layoutSelectedTarget =
+      state.selectionMode === "layout" ? findSelectedLayoutTargetForNode(event.target) : null;
+    const target = layoutSelectedTarget || normalizeSelectableTarget(event.target, event.clientX, event.clientY);
     if (!target) {
       clearHover();
       return;
     }
 
     setHover(target);
+
+    if (state.selectionMode === "layout" && hasSelectedTarget(target)) {
+      setLayoutInsertHint(getLayoutInsertHintForPointer(target, event.clientX, event.clientY));
+    } else {
+      setLayoutInsertHint(null);
+    }
   }
 
   function handlePointerDown(event) {
@@ -6663,7 +7767,11 @@
       if (clickedInsideAdjust || clickedInsideSizeMenu || clickedInsideFillPopover || clickedInsideShadowPopover) {
         return;
       }
+      event.preventDefault();
+      event.stopPropagation();
+      state.suppressClickUntil = Date.now() + 400;
       closeAdjustPopover();
+      return;
     }
 
     if (
@@ -6727,8 +7835,10 @@
     }
 
     if (state.fillPopoverDragSession) {
-      event.preventDefault();
-      finishFillPopoverDrag(event);
+      if (!state.fillPopoverDragSession.managedLocally) {
+        event.preventDefault();
+        finishFillPopoverDrag(event);
+      }
       return;
     }
 
@@ -6785,13 +7895,18 @@
   }
 
   function handleViewportChange() {
+    const fillPopoverHasFocus =
+      state.fillPopover?.dataset.open === "true" &&
+      document.activeElement instanceof Element &&
+      state.fillPopover.contains(document.activeElement);
+
     if (state.highlightsVisible) {
       refreshHighlights();
     }
-    if (isAdjustOpen() && state.adjustTarget) {
+    if (!fillPopoverHasFocus && isAdjustOpen() && state.adjustTarget) {
       positionAdjustPopover(state.adjustTarget);
     }
-    if (state.fillPopover?.dataset.open === "true" && state.adjustTarget) {
+    if (!fillPopoverHasFocus && state.fillPopover?.dataset.open === "true" && state.adjustTarget) {
       const row =
         state.fillPopoverOverlayIndex !== null
           ? state.adjustPopover?.querySelector?.(`[data-adjust-row="fill-overlay"][data-overlay-index="${state.fillPopoverOverlayIndex}"]`)
@@ -6877,6 +7992,27 @@
     showToast("已关闭选择模式");
   }
 
+  function isTextEntryTarget(target) {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    if (target.closest('[contenteditable="true"]')) {
+      return true;
+    }
+
+    const field = target.closest("textarea, input");
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
+      return false;
+    }
+
+    if (field instanceof HTMLTextAreaElement) {
+      return true;
+    }
+
+    return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(field.type);
+  }
+
   function handleKeyDown(event) {
     if (!state.active) {
       return;
@@ -6903,7 +8039,24 @@
       return;
     }
 
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && state.selectedTargets.length) {
+    const isCopyCommand = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c";
+    const isPasteCommand = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v";
+    const hasAdjustLayerSelection = isAdjustOpen() && state.adjustLayerSelectionKeys.length;
+    const isEditingText = isTextEntryTarget(event.target);
+
+    if (isCopyCommand && hasAdjustLayerSelection) {
+      event.preventDefault();
+      copyAdjustLayerSelection();
+      return;
+    }
+
+    if (isPasteCommand && hasAdjustLayerSelection && state.adjustLayerClipboard) {
+      event.preventDefault();
+      pasteAdjustLayerSelection();
+      return;
+    }
+
+    if (isCopyCommand && state.selectedTargets.length) {
       event.preventDefault();
       copySelection();
       return;
