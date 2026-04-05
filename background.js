@@ -33,9 +33,17 @@ async function ensurePickerInjected(tabId) {
     files: ["content.css"]
   });
 
+  // Inject the picker runtime in dependency order without changing behavior.
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content.js"]
+    files: [
+      "content/00-bootstrap.js",
+      "content/10-ui.js",
+      "content/20-core.js",
+      "content/30-selection-layout.js",
+      "content/40-adjust.js",
+      "content/50-runtime.js"
+    ]
   });
 }
 
