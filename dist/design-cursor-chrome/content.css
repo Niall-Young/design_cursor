@@ -2550,6 +2550,165 @@ html.chat-context-picker-number-drag-ready * {
   pointer-events: none;
 }
 
+/* Compact typography and sizing adjustments */
+.chat-context-picker-prompt-input,
+.chat-context-picker-prompt-chip,
+.chat-context-picker-fill-segment,
+.chat-context-picker-fill-angle-input,
+.chat-context-picker-fill-value-input,
+.chat-context-picker-fill-alpha-input,
+.chat-context-picker-fill-angle-label,
+.chat-context-picker-fill-alpha-label,
+.chat-context-picker-fill-format-trigger,
+.chat-context-picker-fill-triplet-input,
+.chat-context-picker-fill-format-option,
+.chat-context-picker-adjust-section-title,
+.chat-context-picker-shadow-segment,
+.chat-context-picker-adjust-inline-input,
+.chat-context-picker-adjust-style-input,
+.chat-context-picker-shadow-input,
+.chat-context-picker-shadow-text-input,
+.chat-context-picker-shadow-percent-input,
+.chat-context-picker-fill-text-input,
+.chat-context-picker-fill-percent-input,
+.chat-context-picker-adjust-input-prefix,
+.chat-context-picker-adjust-input-icon,
+.chat-context-picker-shadow-input-prefix,
+.chat-context-picker-shadow-input-icon,
+.chat-context-picker-shadow-percent-label,
+.chat-context-picker-fill-percent-label,
+.chat-context-picker-size-menu-item,
+.chat-context-picker-gap-menu-item,
+.chat-context-picker-adjust-style-alpha-input,
+.chat-context-picker-adjust-style-alpha-label,
+.chat-context-picker-adjust-style-label,
+.chat-context-picker-popover-count,
+.chat-context-picker-empty-copy,
+.chat-context-picker-item-label,
+.chat-context-picker-action-button {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.chat-context-picker-item-change-summary {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.chat-context-picker-prompt-title,
+.chat-context-picker-adjust-title,
+.chat-context-picker-shadow-title,
+.chat-context-picker-fill-title,
+.chat-context-picker-popover-title {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.chat-context-picker-popover-count,
+.chat-context-picker-item-meta {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.chat-context-picker-prompt-input-shell,
+.chat-context-picker-adjust-popover,
+.chat-context-picker-shadow-popover,
+.chat-context-picker-fill-popover,
+.chat-context-picker-popover {
+  padding: 10px;
+}
+
+.chat-context-picker-prompt-input-shell {
+  margin-top: 10px;
+}
+
+.chat-context-picker-prompt-input,
+.chat-context-picker-prompt-chip,
+.chat-context-picker-action-button {
+  min-height: 36px;
+}
+
+.chat-context-picker-prompt-input {
+  height: 36px;
+}
+
+.chat-context-picker-prompt-chip,
+.chat-context-picker-action-button {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.chat-context-picker-fill-segment,
+.chat-context-picker-shadow-segment,
+.chat-context-picker-adjust-segment {
+  min-height: 26px;
+}
+
+.chat-context-picker-fill-segment,
+.chat-context-picker-shadow-segment {
+  padding: 2px 10px;
+}
+
+.chat-context-picker-fill-angle-field,
+.chat-context-picker-fill-format-trigger,
+.chat-context-picker-fill-value-input,
+.chat-context-picker-fill-triplet-field,
+.chat-context-picker-fill-alpha-field,
+.chat-context-picker-adjust-input-row,
+.chat-context-picker-adjust-style-row,
+.chat-context-picker-adjust-fill-row,
+.chat-context-picker-shadow-input-row,
+.chat-context-picker-shadow-color-row,
+.chat-context-picker-fill-color-row,
+.chat-context-picker-size-menu-item,
+.chat-context-picker-gap-menu-item {
+  min-height: 26px;
+}
+
+.chat-context-picker-fill-angle-field {
+  width: 92px;
+  padding: 3px 8px;
+}
+
+.chat-context-picker-fill-triplet-input {
+  padding: 3px 8px;
+}
+
+.chat-context-picker-adjust-fill-row,
+.chat-context-picker-shadow-input-row,
+.chat-context-picker-shadow-color-row,
+.chat-context-picker-fill-color-row {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.chat-context-picker-adjust-input-suffix-button,
+.chat-context-picker-adjust-close,
+.chat-context-picker-shadow-close,
+.chat-context-picker-fill-close,
+.chat-context-picker-adjust-section-action,
+.chat-context-picker-adjust-row-action,
+.chat-context-picker-popover-close,
+.chat-context-picker-item-icon-button {
+  width: 22px;
+  height: 22px;
+}
+
+.chat-context-picker-popover-count {
+  min-height: 22px;
+  margin-top: 10px;
+}
+
+.chat-context-picker-item {
+  padding: 10px;
+}
+
+.chat-context-picker-list-shell,
+.chat-context-picker-popover-actions,
+.chat-context-picker-adjust-divider {
+  margin-top: 10px;
+}
+
 @media (max-width: 520px) {
   #chat-context-picker-toolbar {
     width: min(360px, calc(100vw - 20px));
