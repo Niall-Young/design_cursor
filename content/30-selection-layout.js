@@ -161,6 +161,8 @@ function drawPromptBadge(target, index) {
     return;
   }
 
+  const badgePosition = getPromptBadgePosition(rect);
+
   const button = document.createElement("button");
   button.type = "button";
   button.className = "chat-context-picker-overlay-edit-badge";
@@ -168,15 +170,24 @@ function drawPromptBadge(target, index) {
   button.setAttribute("aria-label", `编辑目标 ${index + 1}`);
   button.setAttribute("title", `编辑目标 ${index + 1}`);
   button.textContent = String(index + 1);
-  button.style.left = `${rect.right}px`;
-  button.style.top = `${rect.top}px`;
+  button.style.left = `${badgePosition.left}px`;
+  button.style.top = `${badgePosition.top}px`;
+
+  const bringBadgeToFront = () => {
+    if (button.parentElement === state.overlayLayer) {
+      state.overlayLayer.appendChild(button);
+    }
+  };
+
+  button.addEventListener("pointerenter", bringBadgeToFront);
+  button.addEventListener("focus", bringBadgeToFront);
 
   button.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
     event.stopPropagation();
+    bringBadgeToFront();
   });
 
-  button.addEventListener("click", (event) => {
+  const openBadgeEditor = (event) => {
     event.preventDefault();
     event.stopPropagation();
     if (state.selectionMode === "adjust") {
@@ -184,9 +195,138 @@ function drawPromptBadge(target, index) {
     } else {
       openPromptPopover(target, button.getBoundingClientRect());
     }
-  });
+  };
+
+  button.addEventListener("pointerup", openBadgeEditor);
+  button.addEventListener("click", openBadgeEditor);
 
   state.overlayLayer.appendChild(button);
+}
+
+function getPromptBadgePosition(rect) {
+  const badgeSize = 28;
+  const badgeHalf = badgeSize / 2;
+  const viewportPadding = 12;
+  const cornerOffset = 8;
+  const sideOffset = 10;
+  const minLeft = viewportPadding;
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - badgeSize - viewportPadding);
+  const minTop = viewportPadding;
+  const maxTop = Math.max(viewportPadding, window.innerHeight - badgeSize - viewportPadding);
+  const clampHorizontal = (value) => Math.max(minLeft, Math.min(value, maxLeft));
+  const clampVertical = (value) => Math.max(minTop, Math.min(value, maxTop));
+  const verticalCenter = rect.top + (rect.height - badgeSize) / 2;
+  const horizontalCenter = rect.left + (rect.width - badgeSize) / 2;
+  const rightAligned = rect.right + cornerOffset - badgeHalf;
+  const leftAligned = rect.left - cornerOffset - badgeHalf;
+  const topAligned = rect.top - cornerOffset - badgeHalf;
+  const bottomAligned = rect.bottom + cornerOffset - badgeHalf;
+  const rightSide = rect.right + sideOffset - badgeHalf;
+  const leftSide = rect.left - sideOffset - badgeHalf;
+  const topSide = rect.top - sideOffset - badgeHalf;
+  const bottomSide = rect.bottom + sideOffset - badgeHalf;
+  const candidateSeeds = [
+    {
+      name: "right-top",
+      left: rightAligned,
+      top: topAligned
+    },
+    {
+      name: "right-center",
+      left: rightSide,
+      top: verticalCenter
+    },
+    {
+      name: "right-bottom",
+      left: rightAligned,
+      top: bottomAligned
+    },
+    {
+      name: "left-top",
+      left: leftAligned,
+      top: topAligned
+    },
+    {
+      name: "left-center",
+      left: leftSide,
+      top: verticalCenter
+    },
+    {
+      name: "left-bottom",
+      left: leftAligned,
+      top: bottomAligned
+    },
+    {
+      name: "top-left",
+      left: leftAligned,
+      top: topAligned
+    },
+    {
+      name: "top-center",
+      left: horizontalCenter,
+      top: topSide
+    },
+    {
+      name: "top-right",
+      left: rightAligned,
+      top: topAligned
+    },
+    {
+      name: "bottom-left",
+      left: leftAligned,
+      top: bottomAligned
+    },
+    {
+      name: "bottom-center",
+      left: horizontalCenter,
+      top: bottomSide
+    },
+    {
+      name: "bottom-right",
+      left: rightAligned,
+      top: bottomAligned
+    }
+  ];
+
+  const candidates = candidateSeeds.map((candidate) => {
+    const overflowX =
+      Math.max(0, minLeft - candidate.left) +
+      Math.max(0, candidate.left - maxLeft);
+    const overflowY =
+      Math.max(0, minTop - candidate.top) +
+      Math.max(0, candidate.top - maxTop);
+    const left = clampHorizontal(candidate.left);
+    const top = clampVertical(candidate.top);
+    const distance = Math.abs(left - candidate.left) + Math.abs(top - candidate.top);
+
+    return {
+      ...candidate,
+      left,
+      top,
+      overflow: overflowX + overflowY,
+      distance
+    };
+  });
+
+  candidates.sort((first, second) => {
+    if (first.overflow !== second.overflow) {
+      return first.overflow - second.overflow;
+    }
+    if (first.distance !== second.distance) {
+      return first.distance - second.distance;
+    }
+    return 0;
+  });
+
+  return candidates[0]
+    ? {
+        left: candidates[0].left,
+        top: candidates[0].top
+      }
+    : {
+        left: clampHorizontal(rightAligned),
+        top: clampVertical(topAligned)
+      };
 }
 
 function getRectOverlapArea(firstRect, secondRect) {
@@ -215,36 +355,84 @@ function getNonOverlappingPopoverPosition(targetRect, popoverWidth, popoverHeigh
   const maxTop = Math.max(viewportPadding, window.innerHeight - popoverHeight - viewportPadding);
   const clampHorizontal = (value) => Math.max(minLeft, Math.min(value, maxLeft));
   const clampVertical = (value) => Math.max(minTop, Math.min(value, maxTop));
-  const candidates = [
+  const verticalCenter = targetRect.top + (targetRect.height - popoverHeight) / 2;
+  const horizontalCenter = targetRect.left + (targetRect.width - popoverWidth) / 2;
+  const candidateSeeds = [
     {
       side: "right",
       left: targetRect.right + anchorGap,
-      top: clampVertical(desiredTop),
-      availableMain:
-        window.innerWidth - viewportPadding - targetRect.right - anchorGap
+      top: desiredTop,
+      availableMain: window.innerWidth - viewportPadding - targetRect.right - anchorGap
+    },
+    {
+      side: "right",
+      left: targetRect.right + anchorGap,
+      top: verticalCenter,
+      availableMain: window.innerWidth - viewportPadding - targetRect.right - anchorGap
+    },
+    {
+      side: "right",
+      left: targetRect.right + anchorGap,
+      top: targetRect.bottom - popoverHeight,
+      availableMain: window.innerWidth - viewportPadding - targetRect.right - anchorGap
     },
     {
       side: "left",
       left: targetRect.left - popoverWidth - anchorGap,
-      top: clampVertical(desiredTop),
-      availableMain:
-        targetRect.left - viewportPadding - anchorGap
+      top: desiredTop,
+      availableMain: targetRect.left - viewportPadding - anchorGap
+    },
+    {
+      side: "left",
+      left: targetRect.left - popoverWidth - anchorGap,
+      top: verticalCenter,
+      availableMain: targetRect.left - viewportPadding - anchorGap
+    },
+    {
+      side: "left",
+      left: targetRect.left - popoverWidth - anchorGap,
+      top: targetRect.bottom - popoverHeight,
+      availableMain: targetRect.left - viewportPadding - anchorGap
     },
     {
       side: "bottom",
-      left: clampHorizontal(desiredLeft),
+      left: desiredLeft,
       top: targetRect.bottom + anchorGap,
-      availableMain:
-        window.innerHeight - viewportPadding - targetRect.bottom - anchorGap
+      availableMain: window.innerHeight - viewportPadding - targetRect.bottom - anchorGap
+    },
+    {
+      side: "bottom",
+      left: horizontalCenter,
+      top: targetRect.bottom + anchorGap,
+      availableMain: window.innerHeight - viewportPadding - targetRect.bottom - anchorGap
+    },
+    {
+      side: "bottom",
+      left: targetRect.right - popoverWidth,
+      top: targetRect.bottom + anchorGap,
+      availableMain: window.innerHeight - viewportPadding - targetRect.bottom - anchorGap
     },
     {
       side: "top",
-      left: clampHorizontal(desiredLeft),
+      left: desiredLeft,
       top: targetRect.top - popoverHeight - anchorGap,
-      availableMain:
-        targetRect.top - viewportPadding - anchorGap
+      availableMain: targetRect.top - viewportPadding - anchorGap
+    },
+    {
+      side: "top",
+      left: horizontalCenter,
+      top: targetRect.top - popoverHeight - anchorGap,
+      availableMain: targetRect.top - viewportPadding - anchorGap
+    },
+    {
+      side: "top",
+      left: targetRect.right - popoverWidth,
+      top: targetRect.top - popoverHeight - anchorGap,
+      availableMain: targetRect.top - viewportPadding - anchorGap
     }
-  ].map((candidate) => {
+  ];
+
+  const candidates = candidateSeeds.map((candidate) => {
     const left = clampHorizontal(candidate.left);
     const top = clampVertical(candidate.top);
     const overlap = getRectOverlapArea(targetRect, {
@@ -541,7 +729,9 @@ function refreshHighlights() {
     const isDropTarget = isSameTarget(state.dragSession?.dropTarget, target);
     const isDraggedTarget = isSameTarget(state.dragSession?.draggedTarget, target);
     const variant = isDropTarget ? "drop-target" : isDraggedTarget ? "dragging" : "selected";
-    drawHighlight(target, variant);
+    if (!shouldSuppressAdjustTargetHighlightForTarget(target)) {
+      drawHighlight(target, variant);
+    }
 
     if (state.selectionMode === "select" || state.selectionMode === "adjust") {
       drawPromptBadge(target, index);

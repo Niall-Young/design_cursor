@@ -77,6 +77,10 @@ function normalizeSelectableTarget(node, clientX, clientY) {
   }
 
   if (state.selectionMode === "select") {
+    const textNode = getTextNodeFromPoint(clientX, clientY);
+    if (hasMeaningfulText(textNode) && candidateElement.contains(textNode.parentElement)) {
+      return createTextTarget(textNode);
+    }
     return createElementTarget(candidateElement);
   }
 
@@ -130,6 +134,28 @@ function addTargetSelection(target) {
   renderSelection();
   refreshHighlights();
   return findSelectedTarget(target) || target;
+}
+
+function toggleSelectionWithDirectEditor(target, mode) {
+  pruneSelectedTargets();
+  const existingIndex = state.selectedTargets.findIndex((item) => isSameTarget(item, target));
+  if (existingIndex >= 0) {
+    removeSelectionAtIndex(existingIndex);
+    return;
+  }
+
+  const persistedTarget = addTargetSelection(target);
+  state.hoveredTarget = null;
+  state.hoveredSelectedTarget = persistedTarget;
+
+  if (mode === "adjust") {
+    openAdjustPopover(persistedTarget);
+    showToast("已打开调整面板");
+    return;
+  }
+
+  openPromptPopover(persistedTarget);
+  showToast("已打开输入面板");
 }
 
 function clearSelection() {
@@ -216,6 +242,9 @@ function buildClipboardPayloadForTargets(targets) {
   const items = targets.map((target, index) => targetToContext(target, index + 1));
   const isLayoutMode = state.selectionMode === "layout" || items.some((item) => item.layoutPrompt);
   const hasAdjustInstructions = items.some((item) => item.adjustPrompt);
+  const hasReplacementInstructions = items.some(
+    (item) => parseManualPromptInstruction(item.manualPrompt)?.kind === "replace"
+  );
   const layoutSummary = isLayoutMode
     ? [
         "### 布局调整说明",
@@ -233,6 +262,15 @@ function buildClipboardPayloadForTargets(targets) {
         ""
       ]
     : [];
+  const replacementSummary = hasReplacementInstructions
+    ? [
+        "### 内容替换说明",
+        "- 带有“指令类型：替换”的目标，其素材是用来替换当前目标内容的输入源。",
+        "- 不要把替换素材擅自包装成新的 UI 容器、提示区、面板或卡片来展示。",
+        "- 只有用户明确要求“展示这段内容”时，才可以把素材作为可见界面内容来布局。",
+        ""
+      ]
+    : [];
 
   return [
     "# 页面修改上下文",
@@ -245,6 +283,7 @@ function buildClipboardPayloadForTargets(targets) {
     "",
     ...layoutSummary,
     ...adjustSummary,
+    ...replacementSummary,
     ...items.map((item) => [
       `## 目标 ${item.index}：${item.label}`,
       "",
@@ -260,6 +299,7 @@ function buildClipboardPayloadForTargets(targets) {
       `- 文本内容：${item.text || "空"}`,
       `- 位置尺寸：x=${item.rect.x}, y=${item.rect.y}, w=${item.rect.width}, h=${item.rect.height}`,
       `- 关键样式：color=${item.style.color}; background=${item.style.backgroundColor}; font-size=${item.style.fontSize}; font-weight=${item.style.fontWeight}; border-radius=${item.style.borderRadius}; display=${item.style.display}; position=${item.style.position}`,
+      `- 当前阴影：${item.style.boxShadow && item.style.boxShadow !== "none" ? item.style.boxShadow : "无"}`,
       "- HTML 片段：",
       "```html",
       item.html,
@@ -392,22 +432,23 @@ function handlePointerDown(event) {
     return;
   }
 
-  const numberInput = event.target instanceof Element ? event.target.closest('input[type="number"]') : null;
+  const numberInput =
+    event.target instanceof Element ? event.target.closest('input[data-chat-context-picker-numeric="true"]') : null;
   if (event.altKey && numberInput instanceof HTMLInputElement && beginNumberInputDrag(numberInput, event)) {
-    event.preventDefault();
-    event.stopPropagation();
+    consumeInteractionEvent(event);
     return;
   }
 
   if (isPromptOpen()) {
     const clickedInsidePrompt = Boolean(event.target?.closest?.(".chat-context-picker-prompt-popover"));
     if (!clickedInsidePrompt) {
-      event.preventDefault();
-      event.stopPropagation();
+      consumeInteractionEvent(event);
       state.suppressClickUntil = Date.now() + 400;
       savePromptChanges();
+      return;
+    } else {
+      return;
     }
-    return;
   }
 
   if (isAdjustOpen()) {
@@ -419,8 +460,7 @@ function handlePointerDown(event) {
     if (clickedInsideAdjust || clickedInsideSizeMenu || clickedInsideGapMenu || clickedInsideFillPopover || clickedInsideShadowPopover) {
       return;
     }
-    event.preventDefault();
-    event.stopPropagation();
+    consumeInteractionEvent(event);
     state.suppressClickUntil = Date.now() + 400;
     closeAdjustPopover();
     return;
@@ -434,17 +474,12 @@ function handlePointerDown(event) {
     return;
   }
 
-  if (isToolbarElement(event.target)) {
-    return;
-  }
-
   if (state.selectionMode === "layout") {
     const selectedContainingTarget = findSelectedLayoutTargetForNode(event.target);
     if (selectedContainingTarget) {
       const index = state.selectedTargets.findIndex((item) => isSameTarget(item, selectedContainingTarget));
       if (index >= 0) {
-        event.preventDefault();
-        event.stopPropagation();
+        consumeInteractionEvent(event);
         state.suppressClickUntil = Date.now() + 400;
         startLayoutDrag(index, event, "free");
         return;
@@ -457,16 +492,11 @@ function handlePointerDown(event) {
     return;
   }
 
-  event.preventDefault();
-  event.stopPropagation();
+  consumeInteractionEvent(event);
   state.suppressClickUntil = Date.now() + 400;
 
   if (state.selectionMode === "adjust") {
-    const persistedTarget = addTargetSelection(target);
-    state.hoveredTarget = null;
-    state.hoveredSelectedTarget = persistedTarget;
-    openAdjustPopover(persistedTarget);
-    showToast("已打开调整面板");
+    toggleSelectionWithDirectEditor(target, "adjust");
     return;
   }
 
@@ -476,6 +506,11 @@ function handlePointerDown(event) {
       startLayoutDrag(index, event, "free");
       return;
     }
+  }
+
+  if (state.selectionMode === "select") {
+    toggleSelectionWithDirectEditor(target, "select");
+    return;
   }
 
   toggleTargetSelection(target);
@@ -488,17 +523,36 @@ function handlePointerUp(event) {
 
   if (state.fillPopoverDragSession) {
     if (!state.fillPopoverDragSession.managedLocally) {
-      event.preventDefault();
+      consumeInteractionEvent(event);
       finishFillPopoverDrag(event);
     }
     return;
   }
 
   if (state.numberDragSession) {
-    event.preventDefault();
+    consumeInteractionEvent(event);
     finishNumberInputDrag();
     return;
   }
+
+  if (isToolbarElement(event.target)) {
+    return;
+  }
+
+  if (
+    state.selectionMode !== "select" &&
+    state.selectionMode !== "layout" &&
+    state.selectionMode !== "adjust"
+  ) {
+    return;
+  }
+
+  const target = normalizeSelectableTarget(event.target, event.clientX, event.clientY);
+  if (!target) {
+    return;
+  }
+
+  consumeInteractionEvent(event);
 
   if (state.selectionMode !== "layout") {
     return;
@@ -512,9 +566,12 @@ function handleClick(event) {
     return;
   }
 
+  if (isToolbarElement(event.target)) {
+    return;
+  }
+
   if (Date.now() < state.suppressClickUntil) {
-    event.preventDefault();
-    event.stopPropagation();
+    consumeInteractionEvent(event);
     return;
   }
 
@@ -526,14 +583,9 @@ function handleClick(event) {
     return;
   }
 
-  if (isToolbarElement(event.target)) {
-    return;
-  }
-
   const target = normalizeSelectableTarget(event.target, event.clientX, event.clientY);
   if (target && Date.now() < state.suppressClickUntil) {
-    event.preventDefault();
-    event.stopPropagation();
+    consumeInteractionEvent(event);
     return;
   }
 
@@ -541,9 +593,14 @@ function handleClick(event) {
     return;
   }
 
+  consumeInteractionEvent(event);
+  toggleTargetSelection(target);
+}
+
+function consumeInteractionEvent(event) {
   event.preventDefault();
   event.stopPropagation();
-  toggleTargetSelection(target);
+  event.stopImmediatePropagation?.();
 }
 
 function handleViewportChange() {

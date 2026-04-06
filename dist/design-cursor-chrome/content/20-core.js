@@ -47,13 +47,111 @@ function getTargetLabel(target) {
   return getElementDescriptor(target.element);
 }
 
+function isAdjustInteractionSurfaceOpen(surface) {
+  if (!(surface instanceof Element)) {
+    return false;
+  }
+
+  if (surface === state.adjustPopover) {
+    return surface.dataset.open === "true";
+  }
+
+  return surface.dataset.open !== "false";
+}
+
+function shouldSuppressAdjustTargetHighlightForTarget(target) {
+  return Boolean(
+    state.adjustTarget &&
+      state.adjustTargetHighlightSuppressed &&
+      isSameTarget(target, state.adjustTarget)
+  );
+}
+
+function syncAdjustTargetHighlightSuppression() {
+  const activeElement = document.activeElement instanceof Element ? document.activeElement : null;
+  const hasFocusedAdjustControl =
+    Boolean(activeElement) &&
+    [
+      state.adjustPopover,
+      state.sizeMenu,
+      state.gapMenu,
+      state.fillPopover,
+      state.shadowPopover
+    ].some((surface) => isAdjustInteractionSurfaceOpen(surface) && surface.contains(activeElement));
+  const nextSuppressed = Boolean(state.adjustTarget) && (state.adjustTargetHighlightPointerActive || hasFocusedAdjustControl);
+
+  if (state.adjustTargetHighlightSuppressed === nextSuppressed) {
+    return;
+  }
+
+  state.adjustTargetHighlightSuppressed = nextSuppressed;
+  if (state.highlightsVisible) {
+    refreshHighlights();
+  }
+}
+
+function handleAdjustTargetHighlightPointerRelease() {
+  window.removeEventListener("pointerup", handleAdjustTargetHighlightPointerRelease, true);
+  window.removeEventListener("pointercancel", handleAdjustTargetHighlightPointerRelease, true);
+  state.adjustTargetHighlightPointerActive = false;
+  syncAdjustTargetHighlightSuppression();
+}
+
+function beginAdjustTargetHighlightInteraction() {
+  if (!state.adjustTarget) {
+    return;
+  }
+
+  if (!state.adjustTargetHighlightPointerActive) {
+    state.adjustTargetHighlightPointerActive = true;
+    window.addEventListener("pointerup", handleAdjustTargetHighlightPointerRelease, true);
+    window.addEventListener("pointercancel", handleAdjustTargetHighlightPointerRelease, true);
+  }
+
+  syncAdjustTargetHighlightSuppression();
+}
+
+function bindAdjustHighlightSuppression(container) {
+  if (!container || container.dataset.chatContextPickerHighlightSuppressionReady === "true") {
+    return;
+  }
+
+  container.dataset.chatContextPickerHighlightSuppressionReady = "true";
+
+  container.addEventListener(
+    "pointerdown",
+    () => {
+      beginAdjustTargetHighlightInteraction();
+    },
+    true
+  );
+
+  container.addEventListener(
+    "focusin",
+    () => {
+      syncAdjustTargetHighlightSuppression();
+    },
+    true
+  );
+
+  container.addEventListener(
+    "focusout",
+    () => {
+      window.setTimeout(() => {
+        syncAdjustTargetHighlightSuppression();
+      }, 0);
+    },
+    true
+  );
+}
+
 function getPromptSuggestions(target) {
   const element = getTargetElement(target);
   const tag = element.tagName.toLowerCase();
 
   if (target.kind === "text" || /^(span|p|label|strong|em|small|h1|h2|h3|h4|h5|h6|li|a)$/.test(tag)) {
     return [
-      "修改文案为",
+      "替换文案为",
       "修改字号为",
       "修改字重为",
       "修改颜色为",
@@ -64,7 +162,7 @@ function getPromptSuggestions(target) {
 
   if (/^(button|a)$/.test(tag) || element.getAttribute("role") === "button") {
     return [
-      "修改按钮文案为",
+      "替换按钮文案为",
       "修改按钮圆角为",
       "修改按钮背景色为",
       "修改按钮边框为",
@@ -78,7 +176,7 @@ function getPromptSuggestions(target) {
       "调整图片尺寸为",
       "修改图片圆角为",
       "增加阴影效果",
-      "替换为新图标",
+      "替换图标为",
       "修改图片位置为",
       "增加描边效果"
     ];
@@ -86,8 +184,8 @@ function getPromptSuggestions(target) {
 
   if (/^(input|textarea|select)$/.test(tag)) {
     return [
-      "修改输入框文案为",
-      "修改 placeholder 为",
+      "替换输入框文案为",
+      "替换 placeholder 为",
       "修改输入框高度为",
       "修改边框颜色为",
       "修改圆角为",
@@ -103,6 +201,42 @@ function getPromptSuggestions(target) {
     "去掉该元素",
     "修改边框为"
   ];
+}
+
+function parseManualPromptInstruction(rawPrompt) {
+  const prompt = String(rawPrompt || "").trim();
+  if (!prompt) {
+    return null;
+  }
+
+  const replacePatterns = [
+    /^(?:请\s*)?(?:把|将)(?:这个|它|当前(?:元素|内容|文本|文案|图标)?)\s*(?:替换为|替换成|换成|改成)\s*([\s\S]+)$/u,
+    /^(?:请\s*)?(?:替换为|替换成)\s*([\s\S]+)$/u,
+    /^(?:请\s*)?用\s*([\s\S]+?)\s*替换(?:这个|它|当前(?:元素|内容|文本|文案|图标)?)$/u
+  ];
+
+  for (const pattern of replacePatterns) {
+    const match = prompt.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const material = String(match[1] || "").trim();
+    if (!material) {
+      break;
+    }
+
+    return {
+      kind: "replace",
+      material,
+      isLongMaterial: material.includes("\n") || material.length >= 40
+    };
+  }
+
+  return {
+    kind: "instruction",
+    text: prompt
+  };
 }
 
 function renderPromptSuggestions(target) {
@@ -258,7 +392,8 @@ function buildSelectionItemPromptMarkup(target) {
   const summary = entries
     .map((entry) => {
       if (entry.type === "manual") {
-        return "内容变动";
+        const instruction = parseManualPromptInstruction(entry.text);
+        return instruction?.kind === "replace" ? "内容替换" : "内容变动";
       }
       if (entry.type === "layout") {
         return "排版变动";
@@ -280,7 +415,22 @@ function buildItemRequirementBlocks(item, isLayoutMode) {
   const blocks = [];
 
   if (item.manualPrompt) {
-    blocks.push(["#### 额外内容要求", item.manualPrompt].join("\n"));
+    const instruction = parseManualPromptInstruction(item.manualPrompt);
+    if (instruction?.kind === "replace") {
+      blocks.push(
+        [
+          "#### 内容替换指令",
+          "- 指令类型：替换",
+          "- 替换素材：",
+          "```text",
+          instruction.material,
+          "```",
+          "- 执行约束：把这段内容当作替换素材或输入来源，不要把它额外包装成新的 UI 展示区域，除非用户明确要求展示它。"
+        ].join("\n")
+      );
+    } else {
+      blocks.push(["#### 额外内容要求", item.manualPrompt].join("\n"));
+    }
   }
 
   if (item.layoutPrompt) {
@@ -336,6 +486,7 @@ function targetToContext(target, index) {
     style: {
       color: styles.color,
       backgroundColor: styles.backgroundColor,
+      boxShadow: styles.boxShadow,
       fontSize: styles.fontSize,
       fontWeight: styles.fontWeight,
       borderRadius: styles.borderRadius,

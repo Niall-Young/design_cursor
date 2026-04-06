@@ -157,9 +157,9 @@ html.chat-context-picker-number-drag-ready * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 8px;
   border: none;
   border-radius: 999px;
   background: #2a59ff;
@@ -167,11 +167,12 @@ html.chat-context-picker-number-drag-ready * {
   box-shadow: 0 4px 12px rgba(42, 89, 255, 0.24);
   pointer-events: auto;
   cursor: pointer;
-  transform: translate(-50%, -50%);
+  transform: none;
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-sizing: border-box;
 }
 
 .chat-context-picker-overlay-edit-badge:hover {
@@ -375,8 +376,8 @@ html.chat-context-picker-number-drag-ready * {
 }
 
 .chat-context-picker-prompt-input-shell:focus-within {
-  border-color: #333333;
-  box-shadow: 0 0 0 1px #333333;
+  border-color: #2a59ff;
+  box-shadow: none;
 }
 
 .chat-context-picker-prompt-input {
@@ -388,7 +389,10 @@ html.chat-context-picker-number-drag-ready * {
   padding: 0;
   border: none;
   resize: none;
+  appearance: none;
+  -webkit-appearance: none;
   outline: none;
+  box-shadow: none;
   overflow: hidden;
   color: #333333;
   font-size: 14px;
@@ -401,6 +405,13 @@ html.chat-context-picker-number-drag-ready * {
 
 .chat-context-picker-prompt-input::placeholder {
   color: #c0c0c0;
+}
+
+.chat-context-picker-prompt-input:focus,
+.chat-context-picker-prompt-input:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .chat-context-picker-prompt-input:focus::placeholder {
@@ -1536,14 +1547,36 @@ html.chat-context-picker-number-drag-ready * {
 .chat-context-picker-fill-text-input,
 .chat-context-picker-fill-percent-input {
   min-width: 0;
-  border: none;
-  outline: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
   padding: 0;
   background: transparent;
   color: #333333;
   font-size: 14px;
   line-height: 22px;
   font-family: inherit;
+}
+
+.chat-context-picker-shadow-input:focus,
+.chat-context-picker-shadow-input:focus-visible,
+.chat-context-picker-shadow-text-input:focus,
+.chat-context-picker-shadow-text-input:focus-visible,
+.chat-context-picker-shadow-percent-input:focus,
+.chat-context-picker-shadow-percent-input:focus-visible,
+.chat-context-picker-fill-text-input:focus,
+.chat-context-picker-fill-text-input:focus-visible,
+.chat-context-picker-fill-percent-input:focus,
+.chat-context-picker-fill-percent-input:focus-visible,
+.chat-context-picker-adjust-inline-input:focus,
+.chat-context-picker-adjust-inline-input:focus-visible,
+.chat-context-picker-adjust-style-input:focus,
+.chat-context-picker-adjust-style-input:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .chat-context-picker-shadow-input,
@@ -1802,6 +1835,17 @@ html.chat-context-picker-number-drag-ready * {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-context-picker-adjust-shadow-preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   padding: 0;
   border: none;
   background: transparent;

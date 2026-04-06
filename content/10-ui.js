@@ -1,4 +1,119 @@
 // Build the toolbar and editor surfaces that the later runtime wires up.
+function findBulkSelectableInput(target) {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+
+  const input = target.closest(
+    '.chat-context-picker-adjust-inline-input, .chat-context-picker-adjust-style-input, .chat-context-picker-adjust-style-alpha-input, .chat-context-picker-shadow-input, .chat-context-picker-shadow-text-input, .chat-context-picker-shadow-percent-input, .chat-context-picker-fill-value-input, .chat-context-picker-fill-triplet-input, .chat-context-picker-fill-alpha-input, .chat-context-picker-fill-angle-input, .chat-context-picker-fill-text-input, .chat-context-picker-fill-percent-input'
+  );
+
+  if (!(input instanceof HTMLInputElement) || input.disabled || input.readOnly || input.type === "color") {
+    return null;
+  }
+
+  return input;
+}
+
+function enableSingleClickSelectAll(container) {
+  if (!container || container.dataset.chatContextPickerSelectAllReady === "true") {
+    return;
+  }
+
+  container.dataset.chatContextPickerSelectAllReady = "true";
+
+  container.addEventListener(
+    "pointerdown",
+    (event) => {
+      const input = findBulkSelectableInput(event.target);
+      if (!input) {
+        return;
+      }
+
+      input.dataset.chatContextPickerSelectIntent = event.detail >= 2 ? "caret" : "select-all";
+    },
+    true
+  );
+
+  container.addEventListener(
+    "focusin",
+    (event) => {
+      const input = findBulkSelectableInput(event.target);
+      if (!input || input.dataset.chatContextPickerSelectIntent !== "select-all") {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        if (document.activeElement !== input || input.dataset.chatContextPickerSelectIntent !== "select-all") {
+          return;
+        }
+        input.select();
+      });
+    },
+    true
+  );
+
+  container.addEventListener(
+    "click",
+    (event) => {
+      const input = findBulkSelectableInput(event.target);
+      if (!input) {
+        return;
+      }
+
+      if (event.detail >= 2) {
+        input.dataset.chatContextPickerSelectIntent = "caret";
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        if (document.activeElement !== input || input.dataset.chatContextPickerSelectIntent === "caret") {
+          return;
+        }
+        input.select();
+      });
+    },
+    true
+  );
+
+  container.addEventListener(
+    "dblclick",
+    (event) => {
+      const input = findBulkSelectableInput(event.target);
+      if (!input) {
+        return;
+      }
+
+      input.dataset.chatContextPickerSelectIntent = "caret";
+    },
+    true
+  );
+}
+
+function openNativeColorPicker(input) {
+  if (!(input instanceof HTMLInputElement) || input.type !== "color" || input.disabled) {
+    return false;
+  }
+
+  try {
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return true;
+    }
+  } catch (_) {
+    // Fall through to click-based fallback for browsers that reject showPicker.
+  }
+
+  try {
+    input.focus({ preventScroll: true });
+  } catch (_) {
+    input.focus();
+  }
+
+  input.click();
+  return true;
+}
+
 function ensureToolbar() {
   if (state.toolbar) {
     return;
@@ -222,7 +337,7 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row" data-adjust-size-row="width">
           <span class="chat-context-picker-adjust-input-prefix">W</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="width" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="width" />
           <button class="chat-context-picker-adjust-input-suffix-button" type="button" data-action="open-size-menu" data-size-prop="width" aria-label="选择宽度模式" title="选择宽度模式">
             <span class="chat-context-picker-adjust-input-suffix" aria-hidden="true">${icon("chevronDown")}</span>
           </button>
@@ -230,7 +345,7 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row" data-adjust-size-row="height">
           <span class="chat-context-picker-adjust-input-prefix">H</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="height" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="height" />
           <button class="chat-context-picker-adjust-input-suffix-button" type="button" data-action="open-size-menu" data-size-prop="height" aria-label="选择高度模式" title="选择高度模式">
             <span class="chat-context-picker-adjust-input-suffix" aria-hidden="true">${icon("chevronDown")}</span>
           </button>
@@ -251,7 +366,7 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row chat-context-picker-adjust-input-row-tall" data-adjust-gap-row="true">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("gap")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="gap" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="gap" />
           <button class="chat-context-picker-adjust-input-suffix-button" type="button" data-action="open-gap-menu" aria-label="选择间距模式" title="选择间距模式" aria-haspopup="menu" aria-expanded="false">
             <span class="chat-context-picker-adjust-input-suffix" aria-hidden="true">${icon("chevronDown")}</span>
           </button>
@@ -261,22 +376,22 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("padLeft")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="paddingLeft" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="paddingLeft" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("padTop")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="paddingTop" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="paddingTop" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("padRight")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="paddingRight" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="paddingRight" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("padBottom")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="paddingBottom" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="paddingBottom" />
         </label>
       </div>
     </div>
@@ -287,12 +402,12 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("opacity")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" max="100" step="1" data-adjust-input="opacity" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-adjust-input="opacity" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("borderRadius")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="number" min="0" step="1" data-adjust-input="borderRadius" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="borderRadius" />
         </label>
       </div>
     </div>
@@ -316,7 +431,7 @@ function ensureAdjustPopover() {
           <input class="chat-context-picker-adjust-style-input" type="text" data-adjust-text="backgroundColor" spellcheck="false" />
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <label class="chat-context-picker-adjust-style-alpha-field">
-            <input class="chat-context-picker-adjust-style-alpha-input" type="number" min="0" max="100" step="1" data-adjust-alpha="backgroundColor" />
+            <input class="chat-context-picker-adjust-style-alpha-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-adjust-alpha="backgroundColor" />
             <span class="chat-context-picker-adjust-style-alpha-label">%</span>
           </label>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
@@ -611,13 +726,15 @@ function ensureAdjustPopover() {
       const shadowType = actionTarget.dataset.shadowType || "outer";
       const overlayIndex = Number.parseInt(actionTarget.dataset.overlayIndex || "-1", 10);
       if (overlayIndex >= 0) {
-        openShadowPopover(shadowType, actionTarget.getBoundingClientRect(), { overlayIndex });
+        const anchor = actionTarget.closest?.("[data-adjust-row]") || actionTarget;
+        openShadowPopover(shadowType, anchor.getBoundingClientRect(), { overlayIndex });
       }
       return;
     }
 
     if (action === "set-shadow-type") {
-      const anchorRect = actionTarget.getBoundingClientRect();
+      const anchor = actionTarget.closest?.("[data-adjust-row]") || actionTarget;
+      const anchorRect = anchor.getBoundingClientRect();
       const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
       const shadowType = actionTarget.dataset.shadowType || "outer";
       persistedTarget.adjustShadowActiveLayer = shadowType;
@@ -633,7 +750,8 @@ function ensureAdjustPopover() {
 
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      const anchorRect = actionTarget.getBoundingClientRect();
+      const anchor = actionTarget.closest?.("[data-adjust-row]") || actionTarget;
+      const anchorRect = anchor.getBoundingClientRect();
       if (actionTarget.dataset.action === "open-shadow-overlay") {
         const overlayIndex = Number.parseInt(actionTarget.dataset.overlayIndex || "-1", 10);
         if (overlayIndex >= 0) {
@@ -782,6 +900,8 @@ function ensureAdjustPopover() {
   });
 
   document.documentElement.appendChild(popover);
+  enableSingleClickSelectAll(popover);
+  bindAdjustHighlightSuppression(popover);
   state.adjustPopover = popover;
   state.adjustControls = {
     body: popover.querySelector(".chat-context-picker-adjust-body"),
@@ -848,6 +968,7 @@ function ensureSizeMenu() {
   });
 
   document.documentElement.appendChild(menu);
+  bindAdjustHighlightSuppression(menu);
   state.sizeMenu = menu;
   state.sizeMenuControls = {
     items: [...menu.querySelectorAll("[data-size-mode]")]
@@ -892,6 +1013,7 @@ function ensureGapMenu() {
   });
 
   document.documentElement.appendChild(menu);
+  bindAdjustHighlightSuppression(menu);
   state.gapMenu = menu;
   state.gapMenuControls = {
     items: [...menu.querySelectorAll("[data-gap-mode]")],
@@ -924,7 +1046,7 @@ function ensureFillPopover() {
         <label class="chat-context-picker-fill-angle-field">
           <span class="chat-context-picker-fill-angle-icon">${icon("circleDot")}</span>
           <span class="chat-context-picker-fill-angle-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-fill-angle-input" type="number" min="-360" max="360" step="1" data-fill-input="angle" />
+          <input class="chat-context-picker-fill-angle-input" type="text" inputmode="decimal" min="-360" max="360" step="1" data-chat-context-picker-numeric="true" data-fill-input="angle" />
           <span class="chat-context-picker-fill-angle-label">°</span>
         </label>
         <div class="chat-context-picker-fill-gradient-actions">
@@ -974,14 +1096,14 @@ function ensureFillPopover() {
         </div>
         <input class="chat-context-picker-fill-value-input" type="text" data-fill-text="value" spellcheck="false" />
         <div class="chat-context-picker-fill-triplet-field" data-fill-triplet-field hidden>
-          <input class="chat-context-picker-fill-triplet-input" type="number" data-fill-triplet-index="0" />
+          <input class="chat-context-picker-fill-triplet-input" type="text" inputmode="decimal" data-chat-context-picker-numeric="true" data-fill-triplet-index="0" />
           <span class="chat-context-picker-fill-triplet-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-fill-triplet-input" type="number" data-fill-triplet-index="1" />
+          <input class="chat-context-picker-fill-triplet-input" type="text" inputmode="decimal" data-chat-context-picker-numeric="true" data-fill-triplet-index="1" />
           <span class="chat-context-picker-fill-triplet-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-fill-triplet-input" type="number" data-fill-triplet-index="2" />
+          <input class="chat-context-picker-fill-triplet-input" type="text" inputmode="decimal" data-chat-context-picker-numeric="true" data-fill-triplet-index="2" />
         </div>
         <label class="chat-context-picker-fill-alpha-field">
-          <input class="chat-context-picker-fill-alpha-input" type="number" min="0" max="100" step="1" data-fill-input="alpha" />
+          <input class="chat-context-picker-fill-alpha-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-fill-input="alpha" />
           <span class="chat-context-picker-fill-alpha-label">%</span>
         </label>
       </div>
@@ -1191,6 +1313,8 @@ function ensureFillPopover() {
   });
 
   document.documentElement.appendChild(popover);
+  enableSingleClickSelectAll(popover);
+  bindAdjustHighlightSuppression(popover);
   state.fillPopover = popover;
   state.fillControls = {
     modeSolid: popover.querySelector('[data-fill-mode="solid"]'),
@@ -1242,18 +1366,18 @@ function ensureShadowPopover() {
       <label class="chat-context-picker-shadow-input-row">
         <span class="chat-context-picker-shadow-input-prefix">X</span>
         <span class="chat-context-picker-shadow-input-divider" aria-hidden="true"></span>
-        <input class="chat-context-picker-shadow-input" type="number" step="1" data-shadow-input="x" />
+        <input class="chat-context-picker-shadow-input" type="text" inputmode="decimal" step="1" data-chat-context-picker-numeric="true" data-shadow-input="x" />
       </label>
       <label class="chat-context-picker-shadow-input-row">
         <span class="chat-context-picker-shadow-input-prefix">Y</span>
         <span class="chat-context-picker-shadow-input-divider" aria-hidden="true"></span>
-        <input class="chat-context-picker-shadow-input" type="number" step="1" data-shadow-input="y" />
+        <input class="chat-context-picker-shadow-input" type="text" inputmode="decimal" step="1" data-chat-context-picker-numeric="true" data-shadow-input="y" />
       </label>
     </div>
     <label class="chat-context-picker-shadow-input-row">
       <span class="chat-context-picker-shadow-input-icon" aria-hidden="true">${icon("shadowBlur")}</span>
       <span class="chat-context-picker-shadow-input-divider" aria-hidden="true"></span>
-      <input class="chat-context-picker-shadow-input" type="number" min="0" step="1" data-shadow-input="blur" />
+      <input class="chat-context-picker-shadow-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-shadow-input="blur" />
     </label>
     <div class="chat-context-picker-shadow-color-row">
       <button class="chat-context-picker-shadow-swatch-button" type="button" data-action="open-shadow-color-picker" aria-label="选择阴影颜色" title="选择阴影颜色">
@@ -1262,7 +1386,7 @@ function ensureShadowPopover() {
       </button>
       <span class="chat-context-picker-shadow-input-divider" aria-hidden="true"></span>
       <input class="chat-context-picker-shadow-text-input" type="text" data-shadow-text="color" spellcheck="false" />
-      <input class="chat-context-picker-shadow-percent-input" type="number" min="0" max="100" step="1" data-shadow-input="alpha" />
+      <input class="chat-context-picker-shadow-percent-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-shadow-input="alpha" />
       <span class="chat-context-picker-shadow-percent-label">%</span>
     </div>
   `;
@@ -1280,7 +1404,7 @@ function ensureShadowPopover() {
     }
 
     if (actionTarget.dataset.action === "open-shadow-color-picker") {
-      state.shadowControls.colorInput?.click();
+      openFillPopover(actionTarget.getBoundingClientRect(), { source: "shadow" });
       return;
     }
 
@@ -1351,6 +1475,8 @@ function ensureShadowPopover() {
   });
 
   document.documentElement.appendChild(popover);
+  enableSingleClickSelectAll(popover);
+  bindAdjustHighlightSuppression(popover);
   state.shadowPopover = popover;
   state.shadowControls = {
     colorInput: popover.querySelector('[data-shadow-input="color"]'),

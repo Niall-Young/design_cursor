@@ -48,6 +48,11 @@ const SHADOW_PRESETS = {
   inner: `inset ${DEFAULT_SHADOW_X}px ${DEFAULT_SHADOW_Y}px ${DEFAULT_SHADOW_BLUR}px rgba(0, 0, 0, ${DEFAULT_SHADOW_ALPHA})`
 };
 
+function createAdjustLayerId(prefix = "layer") {
+  state.adjustLayerIdCounter = Number.isFinite(state.adjustLayerIdCounter) ? state.adjustLayerIdCounter + 1 : 1;
+  return `${prefix}-${state.adjustLayerIdCounter}`;
+}
+
 function parsePixelValue(value, fallback = 0) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? Math.round(parsed) : fallback;
@@ -623,7 +628,12 @@ function cssColorToHex(value) {
 }
 
 function getNumberInputDragConfig(input) {
-  if (!(input instanceof HTMLInputElement) || input.type !== "number" || input.disabled || input.readOnly) {
+  if (
+    !(input instanceof HTMLInputElement) ||
+    input.dataset.chatContextPickerNumeric !== "true" ||
+    input.disabled ||
+    input.readOnly
+  ) {
     return null;
   }
 
@@ -647,7 +657,7 @@ function getNumberInputDragConfig(input) {
 }
 
 function resolveNumberInputTarget(target) {
-  const input = target instanceof Element ? target.closest('input[type="number"]') : null;
+  const input = target instanceof Element ? target.closest('input[data-chat-context-picker-numeric="true"]') : null;
   return getNumberInputDragConfig(input) ? input : null;
 }
 
@@ -660,9 +670,11 @@ function syncNumberInputReadyCursor() {
     state.hoveredNumberInput = null;
   }
 
-  const showReadyCursor =
-    !state.numberDragSession && state.altKeyPressed && state.hoveredNumberInput instanceof HTMLInputElement;
-  document.documentElement.classList.toggle("chat-context-picker-number-drag-ready", showReadyCursor);
+  const nextReadyInput =
+    !state.numberDragSession && state.altKeyPressed && state.hoveredNumberInput instanceof HTMLInputElement
+      ? state.hoveredNumberInput
+      : null;
+  document.documentElement.classList.toggle("chat-context-picker-number-drag-ready", Boolean(nextReadyInput));
 }
 
 function updateHoveredNumberInput(target, altKey = state.altKeyPressed) {
@@ -692,6 +704,7 @@ function beginNumberInputDrag(input, event) {
     previousUserSelect: document.documentElement.style.userSelect
   };
   state.suppressClickUntil = Date.now() + 400;
+  beginAdjustTargetHighlightInteraction();
   document.documentElement.classList.add("chat-context-picker-number-dragging");
   document.documentElement.style.cursor = "ew-resize";
   document.documentElement.style.userSelect = "none";
@@ -742,9 +755,13 @@ function finishNumberInputDrag() {
   }
 
   state.numberDragSession = null;
+  state.hoveredNumberInput = null;
+  state.altKeyPressed = false;
   document.documentElement.classList.remove("chat-context-picker-number-dragging");
   document.documentElement.style.cursor = session.previousCursor || "";
   document.documentElement.style.userSelect = session.previousUserSelect || "";
+  syncNumberInputReadyCursor();
+  syncAdjustTargetHighlightSuppression();
   return true;
 }
 
@@ -757,19 +774,6 @@ function getShadowLayers(boxShadow) {
     .split(/,(?![^(]*\))/)
     .map((item) => item.trim())
     .filter(Boolean);
-
-  function isVisibleShadowLayer(layer) {
-    const normalized = String(layer || "").trim().toLowerCase();
-    if (!normalized || normalized === "none") {
-      return false;
-    }
-    if (/rgba?\([^)]*,\s*0(?:\.0+)?\s*\)/i.test(normalized)) {
-      return false;
-    }
-
-    const numericValues = normalized.match(/-?\d*\.?\d+px/g) || [];
-    return numericValues.some((value) => Math.abs(Number.parseFloat(value)) > 0);
-  }
 
   return layers.reduce(
     (result, layer) => {
@@ -787,6 +791,19 @@ function getShadowLayers(boxShadow) {
   );
 }
 
+function isVisibleShadowLayer(layer) {
+  const normalized = String(layer || "").trim().toLowerCase();
+  if (!normalized || normalized === "none") {
+    return false;
+  }
+  if (/rgba?\([^)]*,\s*0(?:\.0+)?\s*\)/i.test(normalized)) {
+    return false;
+  }
+
+  const numericValues = normalized.match(/-?\d*\.?\d+px/g) || [];
+  return numericValues.some((value) => Math.abs(Number.parseFloat(value)) > 0);
+}
+
 function splitShadowLayerStrings(boxShadow) {
   if (!boxShadow || boxShadow === "none") {
     return [];
@@ -796,6 +813,70 @@ function splitShadowLayerStrings(boxShadow) {
     .split(/,(?![^(]*\))/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function applyComputedShadowStateToTarget(target, stylesBoxShadow) {
+  const persistedTarget = findSelectedTarget(target) || target;
+  if (!persistedTarget) {
+    return null;
+  }
+
+  const shadowLayerStrings = splitShadowLayerStrings(stylesBoxShadow).filter((layer) => isVisibleShadowLayer(layer));
+  const outerLayer = shadowLayerStrings.find((layer) => !/inset/i.test(layer));
+  const innerLayer = shadowLayerStrings.find((layer) => /inset/i.test(layer));
+  persistedTarget.adjustShadowOuterConfig = parseShadowConfigFromLayer(outerLayer, "outer");
+  persistedTarget.adjustShadowInnerConfig = parseShadowConfigFromLayer(innerLayer, "inner");
+  persistedTarget.adjustAddedOuterShadowLayers = shadowLayerStrings.map((layer) =>
+    normalizeShadowLayerEntry(
+      {
+        type: /inset/i.test(layer) ? "inner" : "outer",
+        visible: true,
+        config: parseShadowConfigFromLayer(layer, /inset/i.test(layer) ? "inner" : "outer")
+      },
+      /inset/i.test(layer) ? "inner" : "outer"
+    )
+  );
+  persistedTarget.adjustShadowOuterEnabled = false;
+  persistedTarget.adjustShadowOuterVisible = false;
+  persistedTarget.adjustShadowInnerEnabled = false;
+  persistedTarget.adjustShadowInnerVisible = false;
+  persistedTarget.adjustShadowActiveLayer = persistedTarget.adjustAddedOuterShadowLayers[0]?.type || "outer";
+  return persistedTarget;
+}
+
+function clearPendingAdjustShadowHydration() {
+  if (state.adjustShadowHydrationTimer) {
+    window.clearTimeout(state.adjustShadowHydrationTimer);
+    state.adjustShadowHydrationTimer = null;
+  }
+}
+
+function scheduleAdjustShadowHydration(target) {
+  clearPendingAdjustShadowHydration();
+
+  const persistedTarget = findSelectedTarget(target) || target;
+  if (!persistedTarget) {
+    return;
+  }
+
+  persistedTarget.adjustShadowStateDirty = false;
+  state.adjustShadowHydrationTimer = window.setTimeout(() => {
+    state.adjustShadowHydrationTimer = null;
+
+    if (!state.adjustTarget || !isSameTarget(state.adjustTarget, persistedTarget) || persistedTarget.adjustShadowStateDirty) {
+      return;
+    }
+
+    const element = getTargetElement(persistedTarget);
+    if (!(element instanceof Element)) {
+      return;
+    }
+
+    applyComputedShadowStateToTarget(persistedTarget, window.getComputedStyle(element).boxShadow);
+    setAdjustPromptBaselines(persistedTarget);
+    syncAdjustPopoverFromTarget(persistedTarget);
+    renderSelectionAndHighlights();
+  }, 80);
 }
 
 function getDefaultShadowConfig(shadowType = "outer") {
@@ -812,6 +893,7 @@ function getDefaultShadowConfig(shadowType = "outer") {
 function normalizeShadowLayerEntry(layer, fallbackType = "outer") {
   const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "inner" : fallbackType;
   return {
+    id: layer?.id || createAdjustLayerId("shadow"),
     type: shadowType,
     visible: layer?.visible !== false,
     config: {
@@ -828,13 +910,18 @@ function parseShadowConfigFromLayer(layer, shadowType = "outer") {
   }
 
   const color = parseAdjustColor(normalized) || parseAdjustColor(DEFAULT_FILL_CSS);
-  const numberMatches = normalized.match(/-?\d*\.?\d+px/g) || [];
+  const lengthValues = normalized
+    .replace(/rgba?\([^)]*\)/gi, " ")
+    .replace(/\binset\b/gi, " ")
+    .match(/-?\d*\.?\d+(?:px)?/g)
+    ?.map((value) => Number.parseFloat(value))
+    .filter((value) => Number.isFinite(value)) || [];
 
   return {
     type: shadowType,
-    x: Number.parseFloat(numberMatches[0] || `${DEFAULT_SHADOW_X}`) || DEFAULT_SHADOW_X,
-    y: Number.parseFloat(numberMatches[1] || `${DEFAULT_SHADOW_Y}`) || DEFAULT_SHADOW_Y,
-    blur: Number.parseFloat(numberMatches[2] || `${DEFAULT_SHADOW_BLUR}`) || DEFAULT_SHADOW_BLUR,
+    x: Number.isFinite(lengthValues[0]) ? lengthValues[0] : DEFAULT_SHADOW_X,
+    y: Number.isFinite(lengthValues[1]) ? lengthValues[1] : DEFAULT_SHADOW_Y,
+    blur: Number.isFinite(lengthValues[2]) ? lengthValues[2] : DEFAULT_SHADOW_BLUR,
     colorHex: color?.hex || DEFAULT_FILL_HEX,
     alpha: color?.alpha ?? DEFAULT_SHADOW_ALPHA
   };
@@ -888,7 +975,7 @@ function getFillBaseRowMarkup(isActive = false, isVisible = true) {
       <input class="chat-context-picker-adjust-style-input" type="text" data-adjust-text="backgroundColor" spellcheck="false" />
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
       <label class="chat-context-picker-adjust-style-alpha-field">
-        <input class="chat-context-picker-adjust-style-alpha-input" type="number" min="0" max="100" step="1" data-adjust-alpha="backgroundColor" />
+        <input class="chat-context-picker-adjust-style-alpha-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-adjust-alpha="backgroundColor" />
         <span class="chat-context-picker-adjust-style-alpha-label">%</span>
       </label>
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
@@ -918,7 +1005,7 @@ function getFillOverlayRowMarkup(layer, index, isActive = false) {
       <input class="chat-context-picker-adjust-style-input" type="text" data-adjust-overlay-text="backgroundColor" data-overlay-index="${index}" value="${escapeHtml(formatAdjustColorHexValue(colorCss))}" spellcheck="false" />
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
       <label class="chat-context-picker-adjust-style-alpha-field">
-        <input class="chat-context-picker-adjust-style-alpha-input" type="number" min="0" max="100" step="1" data-adjust-overlay-alpha="backgroundColor" data-overlay-index="${index}" value="${escapeHtml(formatAdjustColorAlphaValue(colorCss))}" />
+        <input class="chat-context-picker-adjust-style-alpha-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-adjust-overlay-alpha="backgroundColor" data-overlay-index="${index}" value="${escapeHtml(formatAdjustColorAlphaValue(colorCss))}" />
         <span class="chat-context-picker-adjust-style-alpha-label">%</span>
       </label>
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
@@ -937,7 +1024,9 @@ function getShadowBaseRowMarkup(shadowType, isActive = false, isVisible = true) 
   const label = isInner ? "内阴影" : "外阴影";
   return `
     <div class="chat-context-picker-adjust-style-row" data-action="set-shadow-type" data-shadow-type="${shadowType}" data-adjust-row="shadow-${shadowType}" data-adjust-selection-kind="shadow" data-adjust-selection-key="shadow:base:${shadowType}" data-state="${isActive ? "active" : "default"}" role="button" tabindex="0">
-      <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
+      <button class="chat-context-picker-adjust-shadow-preview-button" type="button" data-action="set-shadow-type" data-shadow-type="${shadowType}" aria-label="打开${label}属性" title="打开${label}属性">
+        <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
+      </button>
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
       <div class="chat-context-picker-adjust-style-label">${label}</div>
       <button class="chat-context-picker-adjust-row-action" type="button" data-action="toggle-shadow-visibility" data-shadow-type="${shadowType}" aria-label="显示或隐藏${label}" title="显示或隐藏${label}">
@@ -956,7 +1045,9 @@ function getShadowOverlayRowMarkup(layer, index, isActive = false) {
   const label = shadowType === "inner" ? "内阴影" : "外阴影";
   return `
     <div class="chat-context-picker-adjust-style-row" data-action="open-shadow-overlay" data-shadow-type="${shadowType}" data-adjust-row="shadow-overlay" data-adjust-selection-kind="shadow" data-adjust-selection-key="shadow:overlay:${index}" data-overlay-index="${index}" data-state="${isActive ? "active" : "default"}" data-visible="${visible ? "true" : "false"}" role="button" tabindex="0">
-      <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
+      <button class="chat-context-picker-adjust-shadow-preview-button" type="button" data-action="open-shadow-overlay" data-shadow-type="${shadowType}" data-overlay-index="${index}" aria-label="打开${label}属性" title="打开${label}属性">
+        <span class="chat-context-picker-adjust-shadow-preview chat-context-picker-adjust-shadow-preview-${shadowType}"></span>
+      </button>
       <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
       <div class="chat-context-picker-adjust-style-label">${label}</div>
       <button class="chat-context-picker-adjust-row-action" type="button" data-action="toggle-shadow-overlay-visibility" data-overlay-index="${index}" aria-label="显示或隐藏${label}" title="显示或隐藏${label}">
@@ -1125,12 +1216,20 @@ function selectAdjustLayerRow(row, { shiftKey = false } = {}) {
   setAdjustLayerSelection(kind, [key], key);
 }
 
-function cloneFillOverlayLayer(layer) {
+function normalizeFillOverlayLayerEntry(layer) {
   return {
+    id: layer?.id || createAdjustLayerId("fill"),
     visible: layer?.visible !== false,
     colorHex: layer?.colorHex || DEFAULT_FILL_HEX,
     colorCss: layer?.colorCss || DEFAULT_FILL_CSS
   };
+}
+
+function cloneFillOverlayLayer(layer, { preserveId = true } = {}) {
+  return normalizeFillOverlayLayerEntry({
+    ...layer,
+    id: preserveId ? layer?.id : null
+  });
 }
 
 function createFillLayerFromClipboardEntry(entry) {
@@ -1139,10 +1238,11 @@ function createFillLayerFromClipboardEntry(entry) {
   }
 
   if (entry.role === "overlay" && entry.layer) {
-    return cloneFillOverlayLayer(entry.layer);
+    return cloneFillOverlayLayer(entry.layer, { preserveId: false });
   }
 
   return {
+    id: entry.id || createAdjustLayerId("fill"),
     visible: entry.visible !== false,
     colorHex: entry.colorHex || DEFAULT_BASE_FILL_HEX,
     colorCss: entry.colorCss || DEFAULT_BASE_FILL_CSS
@@ -1161,10 +1261,11 @@ function cloneShadowConfig(config, shadowType = "outer") {
   };
 }
 
-function cloneShadowLayer(layer) {
+function cloneShadowLayer(layer, { preserveId = true } = {}) {
   const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "inner" : "outer";
   return normalizeShadowLayerEntry(
     {
+      id: preserveId ? layer?.id : null,
       type: shadowType,
       visible: layer?.visible !== false,
       config: cloneShadowConfig(layer?.config, shadowType)
@@ -1318,7 +1419,7 @@ function pasteAdjustLayerSelection() {
   }
 
   if (state.adjustLayerClipboard.kind === "shadow") {
-    const layers = state.adjustLayerClipboard.entries.map((entry) => cloneShadowLayer(entry));
+    const layers = state.adjustLayerClipboard.entries.map((entry) => cloneShadowLayer(entry, { preserveId: false }));
     if (!layers.length) {
       return false;
     }
@@ -1531,26 +1632,7 @@ function hydrateAdjustLayerState(target, values = null) {
   persistedTarget.adjustStoredBackgroundHex = currentValues.backgroundColor || "";
   persistedTarget.adjustStoredBackgroundImage = currentValues.backgroundImage || "";
   persistedTarget.adjustFillOverlayLayers = [];
-  const shadowLayerStrings = splitShadowLayerStrings(styles.boxShadow);
-  const outerLayer = shadowLayerStrings.find((layer) => !/inset/i.test(layer));
-  const innerLayer = shadowLayerStrings.find((layer) => /inset/i.test(layer));
-  persistedTarget.adjustShadowOuterConfig = parseShadowConfigFromLayer(outerLayer, "outer");
-  persistedTarget.adjustShadowInnerConfig = parseShadowConfigFromLayer(innerLayer, "inner");
-  persistedTarget.adjustAddedOuterShadowLayers = shadowLayerStrings.map((layer) =>
-    normalizeShadowLayerEntry(
-      {
-        type: /inset/i.test(layer) ? "inner" : "outer",
-        visible: true,
-        config: parseShadowConfigFromLayer(layer, /inset/i.test(layer) ? "inner" : "outer")
-      },
-      /inset/i.test(layer) ? "inner" : "outer"
-    )
-  );
-  persistedTarget.adjustShadowOuterEnabled = false;
-  persistedTarget.adjustShadowOuterVisible = false;
-  persistedTarget.adjustShadowInnerEnabled = false;
-  persistedTarget.adjustShadowInnerVisible = false;
-  persistedTarget.adjustShadowActiveLayer = persistedTarget.adjustAddedOuterShadowLayers[0]?.type || "outer";
+  applyComputedShadowStateToTarget(persistedTarget, styles.boxShadow);
 
   return persistedTarget;
 }
@@ -1603,6 +1685,9 @@ function ensureAdjustLayerState(target, values = null) {
   if (!Array.isArray(persistedTarget.adjustFillOverlayLayers)) {
     persistedTarget.adjustFillOverlayLayers = [];
   }
+  persistedTarget.adjustFillOverlayLayers = (persistedTarget.adjustFillOverlayLayers || []).map((layer) =>
+    normalizeFillOverlayLayerEntry(layer)
+  );
   if (!Array.isArray(persistedTarget.adjustAddedOuterShadowLayers)) {
     persistedTarget.adjustAddedOuterShadowLayers = [];
   }
@@ -1707,6 +1792,7 @@ function applyShadowLayerState(target) {
   if (!persistedTarget) {
     return;
   }
+  persistedTarget.adjustShadowStateDirty = true;
 
   const element = getTargetElement(persistedTarget);
   if (!(element instanceof Element)) {
@@ -1939,6 +2025,197 @@ function getPhysicalAlignment(values) {
   };
 }
 
+function captureAdjustFillPromptState(target) {
+  const persistedTarget = ensureAdjustLayerState(target);
+  if (!persistedTarget) {
+    return null;
+  }
+
+  return {
+    baseEnabled: persistedTarget.adjustFillEnabled === true,
+    baseVisible: persistedTarget.adjustFillVisible !== false,
+    fillType: persistedTarget.adjustFillType || "none",
+    backgroundColor: persistedTarget.adjustStoredBackgroundColor || "",
+    backgroundHex: persistedTarget.adjustStoredBackgroundHex || "",
+    backgroundImage: persistedTarget.adjustStoredBackgroundImage || "",
+    overlays: (persistedTarget.adjustFillOverlayLayers || []).map((layer) => cloneFillOverlayLayer(layer))
+  };
+}
+
+function captureAdjustShadowPromptState(target) {
+  const persistedTarget = ensureAdjustLayerState(target);
+  if (!persistedTarget) {
+    return null;
+  }
+
+  return {
+    layers: (persistedTarget.adjustAddedOuterShadowLayers || []).map((layer) => cloneShadowLayer(layer))
+  };
+}
+
+function setAdjustPromptBaselines(target) {
+  const persistedTarget = ensureAdjustLayerState(target);
+  if (!persistedTarget) {
+    return;
+  }
+
+  persistedTarget.adjustFillPromptBaseline = captureAdjustFillPromptState(persistedTarget);
+  persistedTarget.adjustShadowPromptBaseline = captureAdjustShadowPromptState(persistedTarget);
+}
+
+function isSameFillOverlayLayer(first, second) {
+  return (
+    (first?.colorCss || "") === (second?.colorCss || "") &&
+    (first?.colorHex || "") === (second?.colorHex || "") &&
+    (first?.visible !== false) === (second?.visible !== false)
+  );
+}
+
+function isSameShadowConfig(first, second) {
+  return (
+    Math.round(Number(first?.x || 0)) === Math.round(Number(second?.x || 0)) &&
+    Math.round(Number(first?.y || 0)) === Math.round(Number(second?.y || 0)) &&
+    Math.round(Number(first?.blur || 0)) === Math.round(Number(second?.blur || 0)) &&
+    (first?.type === "inner" ? "inner" : "outer") === (second?.type === "inner" ? "inner" : "outer") &&
+    (normalizeHexColor(first?.colorHex || DEFAULT_FILL_HEX) || DEFAULT_FILL_HEX) ===
+      (normalizeHexColor(second?.colorHex || DEFAULT_FILL_HEX) || DEFAULT_FILL_HEX) &&
+    Math.round(clampAlpha(first?.alpha, DEFAULT_SHADOW_ALPHA) * 100) ===
+      Math.round(clampAlpha(second?.alpha, DEFAULT_SHADOW_ALPHA) * 100)
+  );
+}
+
+function describeAdjustBaseFill(fillState) {
+  if (!fillState?.baseEnabled) {
+    return "无填充";
+  }
+
+  if (fillState.fillType === "gradient" && fillState.backgroundImage) {
+    return "线性渐变";
+  }
+
+  return formatAdjustColorValue(fillState.backgroundColor || fillState.backgroundHex || DEFAULT_BASE_FILL_CSS);
+}
+
+function describeAdjustFillOverlayLayer(layer) {
+  return formatAdjustColorValue(layer?.colorCss || layer?.colorHex || DEFAULT_FILL_CSS);
+}
+
+function describeAdjustShadowLayer(layer) {
+  const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "内阴影" : "外阴影";
+  const config = layer?.config || getDefaultShadowConfig(shadowType === "内阴影" ? "inner" : "outer");
+  const colorCss = buildAdjustColorCss(config.colorHex || DEFAULT_FILL_HEX, config.alpha ?? DEFAULT_SHADOW_ALPHA);
+  return `${shadowType}，X ${Math.round(config.x)}px，Y ${Math.round(config.y)}px，Blur ${Math.round(config.blur)}px，颜色 ${formatAdjustColorValue(colorCss)}`;
+}
+
+function buildAdjustFillOperationLogs(target) {
+  const persistedTarget = ensureAdjustLayerState(target);
+  const baseline = persistedTarget?.adjustFillPromptBaseline || captureAdjustFillPromptState(target);
+  if (!persistedTarget || !baseline) {
+    return [];
+  }
+
+  const operations = [];
+  const current = captureAdjustFillPromptState(persistedTarget);
+
+  if (!baseline.baseEnabled && current.baseEnabled) {
+    operations.push(`新增基础填充：${describeAdjustBaseFill(current)}`);
+  } else if (baseline.baseEnabled && !current.baseEnabled) {
+    operations.push("删除基础填充");
+  } else if (baseline.baseEnabled && current.baseEnabled) {
+    if (baseline.baseVisible !== current.baseVisible) {
+      operations.push(`${current.baseVisible ? "显示" : "隐藏"}基础填充`);
+    }
+
+    const baseChanged =
+      baseline.fillType !== current.fillType ||
+      (current.fillType === "gradient"
+        ? (baseline.backgroundImage || "") !== (current.backgroundImage || "")
+        : (baseline.backgroundColor || "") !== (current.backgroundColor || ""));
+    if (baseChanged) {
+      operations.push(`将基础填充改为 ${describeAdjustBaseFill(current)}`);
+    }
+  }
+
+  const baselineOverlays = baseline.overlays || [];
+  const currentOverlays = current.overlays || [];
+  const baselineById = new Map(baselineOverlays.map((layer, index) => [layer.id, { layer, index }]));
+  const currentById = new Map(currentOverlays.map((layer, index) => [layer.id, { layer, index }]));
+
+  baselineOverlays.forEach((layer, index) => {
+    if (!currentById.has(layer.id)) {
+      operations.push(`删除第 ${index + 1} 个叠加填充层`);
+    }
+  });
+
+  currentOverlays.forEach((layer, index) => {
+    if (!baselineById.has(layer.id)) {
+      operations.push(`新增第 ${index + 1} 个叠加填充层：${describeAdjustFillOverlayLayer(layer)}`);
+      return;
+    }
+
+    const baselineEntry = baselineById.get(layer.id)?.layer;
+    if (!baselineEntry) {
+      return;
+    }
+
+    if ((baselineEntry.visible !== false) !== (layer.visible !== false)) {
+      operations.push(`${layer.visible !== false ? "显示" : "隐藏"}第 ${index + 1} 个叠加填充层`);
+    }
+
+    if (!isSameFillOverlayLayer(baselineEntry, layer) && (baselineEntry.colorCss !== layer.colorCss || baselineEntry.colorHex !== layer.colorHex)) {
+      operations.push(`将第 ${index + 1} 个叠加填充层改为 ${describeAdjustFillOverlayLayer(layer)}`);
+    }
+  });
+
+  return operations;
+}
+
+function buildAdjustShadowOperationLogs(target) {
+  const persistedTarget = ensureAdjustLayerState(target);
+  const baseline = persistedTarget?.adjustShadowPromptBaseline || captureAdjustShadowPromptState(target);
+  if (!persistedTarget || !baseline) {
+    return [];
+  }
+
+  const operations = [];
+  const current = captureAdjustShadowPromptState(persistedTarget);
+  const baselineLayers = baseline.layers || [];
+  const currentLayers = current.layers || [];
+  const baselineById = new Map(baselineLayers.map((layer, index) => [layer.id, { layer, index }]));
+  const currentById = new Map(currentLayers.map((layer, index) => [layer.id, { layer, index }]));
+
+  baselineLayers.forEach((layer, index) => {
+    if (!currentById.has(layer.id)) {
+      operations.push(`删除第 ${index + 1} 个阴影层（${layer.type === "inner" ? "内阴影" : "外阴影"}）`);
+    }
+  });
+
+  currentLayers.forEach((layer, index) => {
+    if (!baselineById.has(layer.id)) {
+      operations.push(`新增第 ${index + 1} 个阴影层：${describeAdjustShadowLayer(layer)}`);
+      return;
+    }
+
+    const baselineEntry = baselineById.get(layer.id)?.layer;
+    if (!baselineEntry) {
+      return;
+    }
+
+    if ((baselineEntry.visible !== false) !== (layer.visible !== false)) {
+      operations.push(`${layer.visible !== false ? "显示" : "隐藏"}第 ${index + 1} 个阴影层（${layer.type === "inner" ? "内阴影" : "外阴影"}）`);
+    }
+
+    const shadowTypeChanged =
+      (baselineEntry.type === "inner" ? "inner" : "outer") !== (layer.type === "inner" ? "inner" : "outer");
+    const shadowConfigChanged = !isSameShadowConfig(baselineEntry.config, layer.config);
+    if (shadowTypeChanged || shadowConfigChanged) {
+      operations.push(`将第 ${index + 1} 个阴影层改为 ${describeAdjustShadowLayer(layer)}`);
+    }
+  });
+
+  return operations;
+}
+
 function getAdjustPromptText(target) {
   const values = getAdjustValues(target);
   const physicalAlignment = getPhysicalAlignment(values);
@@ -1957,34 +2234,29 @@ function getAdjustPromptText(target) {
       bottom: "下"
     }[physicalAlignment.vertical] || physicalAlignment.vertical;
   const persistedTarget = ensureAdjustLayerState(target, values);
-  const shadowLabels = [];
-  (persistedTarget?.adjustAddedOuterShadowLayers || []).forEach((layer) => {
-    const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "内阴影" : "外阴影";
-    shadowLabels.push(layer?.visible === false ? `${shadowType}（隐藏）` : shadowType);
-  });
   const spacingLabel =
     values.spacingMode === "auto"
       ? "Auto（space between）"
       : values.spacingMode === "special"
         ? "Special（space around）"
         : `${values.gap}px`;
+  const fillOperations = buildAdjustFillOperationLogs(persistedTarget);
+  const shadowOperations = buildAdjustShadowOperationLogs(persistedTarget);
 
-  return [
+  const lines = [
     `布局：${directionLabel}，尺寸 ${values.width}px × ${values.height}px，对齐 ${verticalLabel}${horizontalLabel}，间距 ${spacingLabel}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`,
-    `外观：不透明度 ${values.opacity}% ，圆角 ${values.borderRadius}px。`,
-    `填充：${
-      persistedTarget?.adjustFillEnabled
-        ? persistedTarget.adjustFillVisible
-          ? persistedTarget.adjustFillType === "gradient"
-            ? "线性渐变"
-            : formatAdjustColorValue(
-                persistedTarget.adjustStoredBackgroundColor || values.backgroundColorCss || values.backgroundColor
-              ) || "无"
-          : "已隐藏"
-        : "无"
-    }。`,
-    `阴影：${shadowLabels.length ? shadowLabels.join("、") : "无"}。`
-  ].join("\n");
+    `外观：不透明度 ${values.opacity}% ，圆角 ${values.borderRadius}px。`
+  ];
+
+  if (fillOperations.length) {
+    lines.push(`颜色图层操作：${fillOperations.join("；")}。`);
+  }
+
+  if (shadowOperations.length) {
+    lines.push(`阴影操作：${shadowOperations.join("；")}。`);
+  }
+
+  return lines.join("\n");
 }
 
 function refreshAdjustPromptText(target) {
@@ -2086,6 +2358,18 @@ function getActiveShadowConfig(target = state.adjustTarget, shadowType = state.s
 }
 
 function getActiveFillConfig(target = state.adjustTarget) {
+  if (state.fillPopoverSource === "shadow") {
+    const shadowConfig = getActiveShadowConfig(target, state.shadowPopoverType);
+    if (!shadowConfig) {
+      return null;
+    }
+
+    return (
+      parseAdjustColor(buildAdjustColorCss(shadowConfig.colorHex || DEFAULT_FILL_HEX, shadowConfig.alpha ?? DEFAULT_SHADOW_ALPHA)) ||
+      parseAdjustColor(DEFAULT_FILL_CSS)
+    );
+  }
+
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
     return null;
@@ -2132,8 +2416,9 @@ function renderFillPopoverControls() {
     return;
   }
 
+  const isShadowSource = state.fillPopoverSource === "shadow";
   const isOverlay = state.fillPopoverOverlayIndex !== null;
-  const mode = isOverlay ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
+  const mode = isShadowSource || isOverlay ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
   const solidColor = cloneHsvaColor(
     state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 }
   );
@@ -2148,8 +2433,16 @@ function renderFillPopoverControls() {
   state.fillPopoverGradientActiveStop = activeStopIndex;
   state.fillControls.modeSolid.dataset.state = mode === "solid" ? "active" : "inactive";
   state.fillControls.modeGradient.dataset.state = mode === "gradient" ? "active" : "inactive";
-  state.fillControls.modeGradient.disabled = isOverlay;
-  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay ? "true" : "false");
+  state.fillControls.modeGradient.disabled = isOverlay || isShadowSource;
+  state.fillControls.modeGradient.hidden = isShadowSource;
+  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay || isShadowSource ? "true" : "false");
+  if (state.fillControls.modeSolid) {
+    state.fillControls.modeSolid.hidden = isShadowSource;
+  }
+  if (state.fillControls.modeSolid?.parentElement) {
+    state.fillControls.modeSolid.parentElement.hidden = isShadowSource;
+    state.fillControls.modeSolid.parentElement.style.display = isShadowSource ? "none" : "";
+  }
 
   if (state.fillControls.gradientControls) {
     state.fillControls.gradientControls.hidden = mode !== "gradient";
@@ -2343,6 +2636,23 @@ function syncFillPopoverFromTarget(target = state.adjustTarget) {
     return;
   }
 
+  if (state.fillPopoverSource === "shadow") {
+    const fallbackColor = colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 };
+    const activeConfig = getActiveFillConfig(target);
+    const solidColor =
+      colorStringToHsva(activeConfig?.css || activeConfig?.hex || DEFAULT_FILL_CSS, fallbackColor) || cloneHsvaColor(fallbackColor);
+
+    state.fillPopoverMode = "solid";
+    state.fillPopoverSolidColor = cloneHsvaColor(solidColor);
+    state.fillPopoverGradientStops = ensureGradientStops(null, solidColor);
+    state.fillPopoverGradientAngle = 0;
+    state.fillPopoverGradientActiveStop = 0;
+    state.fillPopoverFormat = ["hex", "rgb", "hsl"].includes(state.fillPopoverFormat) ? state.fillPopoverFormat : "hex";
+    state.fillPopoverFormatMenuOpen = false;
+    renderFillPopoverControls();
+    return;
+  }
+
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
     return;
@@ -2386,6 +2696,16 @@ function applyFillPopoverState({ commit = false, sync = true } = {}) {
 
   const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
   if (!persistedTarget) {
+    return;
+  }
+
+  if (state.fillPopoverSource === "shadow") {
+    const color = cloneHsvaColor(state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 });
+    applyShadowPopoverInput("color", hsvaToHex(color), { commit: false, sync: false });
+    applyShadowPopoverInput("alpha", Math.round(clampAlpha(color.a, 1) * 100), { commit, sync });
+    if (state.fillPopover?.dataset.open === "true") {
+      renderFillPopoverControls();
+    }
     return;
   }
 
@@ -2443,7 +2763,7 @@ function applyFillPopoverState({ commit = false, sync = true } = {}) {
 }
 
 function setActiveFillPopoverColor(nextColor, { commit = false, sync = true } = {}) {
-  if (state.fillPopoverMode === "gradient") {
+  if (state.fillPopoverSource !== "shadow" && state.fillPopoverMode === "gradient") {
     const stops = ensureGradientStops(state.fillPopoverGradientStops, state.fillPopoverSolidColor);
     const index = clampNumber(state.fillPopoverGradientActiveStop, 0, Math.max(0, stops.length - 1), 0);
     stops[index] = {
@@ -2465,7 +2785,7 @@ function setActiveFillPopoverColor(nextColor, { commit = false, sync = true } = 
 }
 
 function setFillPopoverMode(mode, { commit = false, sync = true } = {}) {
-  if (state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -2493,7 +2813,7 @@ function setFillPopoverMode(mode, { commit = false, sync = true } = {}) {
 }
 
 function addFillPopoverGradientStop() {
-  if (state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -2521,7 +2841,7 @@ function addFillPopoverGradientStop() {
 }
 
 function swapFillPopoverGradientStops() {
-  if (state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -2542,6 +2862,8 @@ function beginFillPopoverDrag(type, event, extras = {}) {
   if (!state.fillPopover) {
     return;
   }
+
+  beginAdjustTargetHighlightInteraction();
 
   if (event.target instanceof Element && typeof event.target.setPointerCapture === "function") {
     try {
@@ -2648,6 +2970,7 @@ function finishFillPopoverDrag(event) {
   }
   updateFillPopoverDrag(event, true);
   state.fillPopoverDragSession = null;
+  syncAdjustTargetHighlightSuppression();
   return true;
 }
 
@@ -2779,6 +3102,13 @@ function getFillPopoverAnchorRect() {
     return state.fillPopoverAnchorRect;
   }
 
+  if (state.fillPopoverSource === "shadow") {
+    return (
+      state.shadowControls?.swatch?.closest?.(".chat-context-picker-shadow-color-row")?.getBoundingClientRect?.() ||
+      state.fillPopoverAnchorRect
+    );
+  }
+
   const row =
     state.fillPopoverOverlayIndex !== null
       ? state.adjustPopover.querySelector(
@@ -2812,7 +3142,7 @@ function positionShadowPopover(anchorRect) {
   state.shadowPopover.style.top = `${top}px`;
 }
 
-function openFillPopover(anchorRect = null, { overlayIndex = null } = {}) {
+function openFillPopover(anchorRect = null, { overlayIndex = null, source = "fill" } = {}) {
   if (!state.adjustTarget) {
     return;
   }
@@ -2820,9 +3150,13 @@ function openFillPopover(anchorRect = null, { overlayIndex = null } = {}) {
   ensureFillPopover();
   closeSizeMenu();
   closeGapMenu();
-  closeShadowPopover();
+  if (source !== "shadow") {
+    closeShadowPopover();
+  }
+  state.fillPopoverSource = source === "shadow" ? "shadow" : "fill";
   state.fillPopoverFormatMenuOpen = false;
-  state.fillPopoverOverlayIndex = Number.isInteger(overlayIndex) && overlayIndex >= 0 ? overlayIndex : null;
+  state.fillPopoverOverlayIndex =
+    state.fillPopoverSource === "fill" && Number.isInteger(overlayIndex) && overlayIndex >= 0 ? overlayIndex : null;
   state.fillPopoverAnchorRect = anchorRect || state.fillPopoverAnchorRect;
   syncFillPopoverFromTarget(state.adjustTarget);
   state.fillPopover.dataset.open = "true";
@@ -2863,6 +3197,7 @@ function closeFillPopover() {
   state.fillPopover.dataset.open = "false";
   state.fillPopoverDragSession = null;
   state.fillPopoverFormatMenuOpen = false;
+  state.fillPopoverSource = "fill";
   state.fillPopoverOverlayIndex = null;
   state.fillPopoverAnchorRect = null;
   if (state.adjustTarget) {
@@ -3167,6 +3502,9 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
 }
 
 function closeShadowPopover() {
+  if (state.fillPopover?.dataset.open === "true" && state.fillPopoverSource === "shadow") {
+    closeFillPopover();
+  }
   if (!state.shadowPopover) {
     return;
   }
@@ -3581,6 +3919,7 @@ function openAdjustPopover(target, anchorRect = null) {
   } else {
     ensureAdjustLayerState(persistedTarget);
   }
+  setAdjustPromptBaselines(persistedTarget);
   state.adjustTarget = persistedTarget;
   state.adjustStyleBaseline = captureAdjustableStyleSnapshot(getTargetElement(persistedTarget));
   clearAdjustLayerSelection();
@@ -3589,7 +3928,9 @@ function openAdjustPopover(target, anchorRect = null) {
   state.adjustPopover.dataset.open = "true";
   state.hoveredTarget = null;
   state.hoveredSelectedTarget = persistedTarget;
+  syncAdjustTargetHighlightSuppression();
   refreshHighlights();
+  scheduleAdjustShadowHydration(persistedTarget);
 }
 
 function closeAdjustPopover() {
@@ -3597,6 +3938,7 @@ function closeAdjustPopover() {
     return;
   }
 
+  clearPendingAdjustShadowHydration();
   commitAdjustChanges();
   closeSizeMenu();
   closeGapMenu();
@@ -3604,6 +3946,8 @@ function closeAdjustPopover() {
   closeShadowPopover();
   state.adjustPopover.dataset.open = "false";
   state.adjustTarget = null;
+  state.adjustTargetHighlightPointerActive = false;
+  state.adjustTargetHighlightSuppressed = false;
   state.adjustStyleBaseline = null;
   clearAdjustLayerSelection();
   refreshHighlights();

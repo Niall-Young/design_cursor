@@ -28,6 +28,8 @@ const state = {
   promptSavedSelectionMode: null,
   adjustPopover: null,
   adjustTarget: null,
+  adjustTargetHighlightSuppressed: false,
+  adjustTargetHighlightPointerActive: false,
   adjustControls: {},
   adjustStyleBaseline: null,
   adjustLayerSelectionKind: null,
@@ -43,6 +45,7 @@ const state = {
   gapMenuAnchorRect: null,
   fillPopover: null,
   fillControls: {},
+  fillPopoverSource: "fill",
   fillPopoverOverlayIndex: null,
   fillPopoverAnchorRect: null,
   fillPopoverMode: "solid",
@@ -58,6 +61,8 @@ const state = {
   shadowPopoverType: "outer",
   shadowPopoverOverlayIndex: null,
   shadowPopoverAnchorRect: null,
+  adjustShadowHydrationTimer: null,
+  adjustLayerIdCounter: 0,
   hoveredNumberInput: null,
   altKeyPressed: false,
   numberDragSession: null,
@@ -269,23 +274,27 @@ const ICONS = {
     </svg>
   `,
   padTop: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-      <path d="M3.5 2C4.32843 2 5 2.67157 5 3.5V9.5C5 10.3284 4.32843 11 3.5 11H2.5C1.67157 11 1 10.3284 1 9.5V3.5C1 2.67157 1.67157 2 2.5 2H3.5ZM2.5 3C2.22386 3 2 3.22386 2 3.5V9.5C2 9.77614 2.22386 10 2.5 10H3.5C3.77614 10 4 9.77614 4 9.5V3.5C4 3.22386 3.77614 3 3.5 3H2.5ZM8.5 2C9.32843 2 10 2.67157 10 3.5V6C10 6.82843 9.32843 7.5 8.5 7.5H7.5C6.67157 7.5 6 6.82843 6 6V3.5C6 2.67157 6.67157 2 7.5 2H8.5ZM7.5 3C7.22386 3 7 3.22386 7 3.5V6C7 6.27614 7.22386 6.5 7.5 6.5H8.5C8.77614 6.5 9 6.27614 9 6V3.5C9 3.22386 8.77614 3 8.5 3H7.5ZM10.5 0C10.7761 0 11 0.223858 11 0.5C11 0.776142 10.7761 1 10.5 1H0.5C0.223858 1 0 0.776142 0 0.5C0 0.223858 0.223858 0 0.5 0H10.5Z" fill="currentColor" />
+    <svg class="lucide lucide-panel-top" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
     </svg>
   `,
   padRight: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-      <path d="M10.5 10C10.7761 10 11 10.2239 11 10.5C11 10.7761 10.7761 11 10.5 11H0.5C0.223858 11 0 10.7761 0 10.5C0 10.2239 0.223858 10 0.5 10H10.5ZM3.5 0C4.32843 0 5 0.671573 5 1.5V7.5C5 8.32843 4.32843 9 3.5 9H2.5C1.67157 9 1 8.32843 1 7.5V1.5C1 0.671573 1.67157 0 2.5 0H3.5ZM8.5 3.5C9.32843 3.5 10 4.17157 10 5V7.5C10 8.32843 9.32843 9 8.5 9H7.5C6.67157 9 6 8.32843 6 7.5V5C6 4.17157 6.67157 3.5 7.5 3.5H8.5ZM2.5 1C2.22386 1 2 1.22386 2 1.5V7.5C2 7.77614 2.22386 8 2.5 8H3.5C3.77614 8 4 7.77614 4 7.5V1.5C4 1.22386 3.77614 1 3.5 1H2.5ZM7.5 4.5C7.22386 4.5 7 4.72386 7 5V7.5C7 7.77614 7.22386 8 7.5 8H8.5C8.77614 8 9 7.77614 9 7.5V5C9 4.72386 8.77614 4.5 8.5 4.5H7.5Z" fill="currentColor" />
+    <svg class="lucide lucide-panel-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M15 3v18" />
     </svg>
   `,
   padBottom: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-      <path d="M10.5 0C10.7761 0 11 0.223858 11 0.5V10.5C11 10.7761 10.7761 11 10.5 11C10.2239 11 10 10.7761 10 10.5V0.5C10 0.223858 10.2239 0 10.5 0ZM7.5 6C8.32843 6 9 6.67157 9 7.5V8.5C9 9.32843 8.32843 10 7.5 10H5C4.17157 10 3.5 9.32843 3.5 8.5V7.5C3.5 6.67157 4.17157 6 5 6H7.5ZM5 7C4.72386 7 4.5 7.22386 4.5 7.5V8.5C4.5 8.77614 4.72386 9 5 9H7.5C7.77614 9 8 8.77614 8 8.5V7.5C8 7.22386 7.77614 7 7.5 7H5ZM7.5 1C8.32843 1 9 1.67157 9 2.5V3.5C9 4.32843 8.32843 5 7.5 5H1.5C0.671573 5 0 4.32843 0 3.5V2.5C0 1.67157 0.671573 1 1.5 1H7.5ZM1.5 2C1.22386 2 1 2.22386 1 2.5V3.5C1 3.77614 1.22386 4 1.5 4H7.5C7.77614 4 8 3.77614 8 3.5V2.5C8 2.22386 7.77614 2 7.5 2H1.5Z" fill="currentColor" />
+    <svg class="lucide lucide-panel-bottom" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 15h18" />
     </svg>
   `,
   padLeft: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-      <path d="M0.5 0C0.776142 0 1 0.223858 1 0.5V10.5C1 10.7761 0.776142 11 0.5 11C0.223858 11 0 10.7761 0 10.5V0.5C0 0.223858 0.223858 0 0.5 0ZM6 6C6.82843 6 7.5 6.67157 7.5 7.5V8.5C7.5 9.32843 6.82843 10 6 10H3.5C2.67157 10 2 9.32843 2 8.5V7.5C2 6.67157 2.67157 6 3.5 6H6ZM3.5 7C3.22386 7 3 7.22386 3 7.5V8.5C3 8.77614 3.22386 9 3.5 9H6C6.27614 9 6.5 8.77614 6.5 8.5V7.5C6.5 7.22386 6.27614 7 6 7H3.5ZM9.5 1C10.3284 1 11 1.67157 11 2.5V3.5C11 4.32843 10.3284 5 9.5 5H3.5C2.67157 5 2 4.32843 2 3.5V2.5C2 1.67157 2.67157 1 3.5 1H9.5ZM3.5 2C3.22386 2 3 2.22386 3 2.5V3.5C3 3.77614 3.22386 4 3.5 4H9.5C9.77614 4 10 3.77614 10 3.5V2.5C10 2.22386 9.77614 2 9.5 2H3.5Z" fill="currentColor" />
+    <svg class="lucide lucide-panel-left" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
     </svg>
   `
 };
