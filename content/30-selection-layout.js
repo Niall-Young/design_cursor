@@ -55,6 +55,110 @@ function isSelectableElement(node) {
   return true;
 }
 
+function hasVisibleBox(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function getSelectableParent(element) {
+  let current = element?.parentElement || null;
+
+  while (current) {
+    if (isSelectableElement(current)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function getSelectableHierarchyChildren(parent) {
+  if (!(parent instanceof Element)) {
+    return [];
+  }
+
+  return Array.from(parent.children).filter(
+    (child) => isSelectableElement(child) && hasVisibleBox(child)
+  );
+}
+
+function rememberSelectableChild(parent, child) {
+  if (
+    !(parent instanceof Element) ||
+    !(child instanceof Element) ||
+    child.parentElement !== parent ||
+    !isSelectableElement(child)
+  ) {
+    return;
+  }
+
+  state.hierarchyChildMemory.set(parent, child);
+}
+
+function getDirectSelectableChildForDescendant(parent, descendant) {
+  if (!(parent instanceof Element) || !(descendant instanceof Element)) {
+    return null;
+  }
+
+  let current = descendant;
+  let directChild = null;
+
+  while (current && current !== parent) {
+    directChild = current;
+    current = current.parentElement;
+  }
+
+  if (current !== parent || !(directChild instanceof Element)) {
+    return null;
+  }
+
+  return directChild.parentElement === parent && isSelectableElement(directChild) ? directChild : null;
+}
+
+function getSelectableChild(parent, context = {}) {
+  if (!(parent instanceof Element)) {
+    return null;
+  }
+
+  const directChildren = getSelectableHierarchyChildren(parent);
+  if (!directChildren.length) {
+    return null;
+  }
+
+  const rememberedChild = context.rememberedChild || state.hierarchyChildMemory.get(parent) || null;
+  if (
+    rememberedChild instanceof Element &&
+    rememberedChild.parentElement === parent &&
+    directChildren.includes(rememberedChild)
+  ) {
+    return rememberedChild;
+  }
+
+  const clientX = Number.isFinite(context.clientX) ? context.clientX : state.lastPointerClientX;
+  const clientY = Number.isFinite(context.clientY) ? context.clientY : state.lastPointerClientY;
+
+  if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+    const stack = document.elementsFromPoint(clientX, clientY);
+    for (const element of stack) {
+      if (!(element instanceof Element) || isToolbarElement(element)) {
+        continue;
+      }
+
+      const directChild = getDirectSelectableChildForDescendant(parent, element);
+      if (directChild && directChildren.includes(directChild)) {
+        return directChild;
+      }
+    }
+  }
+
+  return directChildren[0] || null;
+}
+
 function hasMeaningfulText(textNode) {
   return textNode?.nodeType === Node.TEXT_NODE && /\S/.test(textNode.textContent || "");
 }

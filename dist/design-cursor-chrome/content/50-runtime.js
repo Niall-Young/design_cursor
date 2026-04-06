@@ -92,6 +92,72 @@ function normalizeSelectableTarget(node, clientX, clientY) {
   return createElementTarget(candidateElement);
 }
 
+function updateLastPointerPosition(clientX, clientY) {
+  state.lastPointerClientX = Number.isFinite(clientX) ? clientX : null;
+  state.lastPointerClientY = Number.isFinite(clientY) ? clientY : null;
+}
+
+function replaceSingleSelectionTarget(target) {
+  pruneSelectedTargets();
+  const previous = snapshotSelection();
+  state.selectedTargets = [target];
+  if (isElementTarget(target)) {
+    const parent = getSelectableParent(target.element);
+    if (parent) {
+      rememberSelectableChild(parent, target.element);
+    }
+  }
+  state.hoveredTarget = null;
+  state.hoveredSelectedTarget = target;
+  if (!areSelectionsEqual(previous, state.selectedTargets)) {
+    pushSelectionHistory(previous);
+  }
+  renderSelection();
+  refreshHighlights();
+  return target;
+}
+
+function navigateSelectionHierarchy(direction) {
+  pruneSelectedTargets();
+
+  if (state.selectedTargets.length !== 1) {
+    showToast("请先只选中一个元素");
+    return true;
+  }
+
+  const currentTarget = state.selectedTargets[0];
+  if (!isElementTarget(currentTarget)) {
+    showToast("当前仅支持元素层级切换");
+    return true;
+  }
+
+  const currentElement = currentTarget.element;
+  let nextElement = null;
+
+  if (direction === "parent") {
+    nextElement = getSelectableParent(currentElement);
+    if (!nextElement) {
+      showToast("已到最外层可选元素");
+      return true;
+    }
+    rememberSelectableChild(nextElement, currentElement);
+  } else {
+    nextElement = getSelectableChild(currentElement, {
+      clientX: state.lastPointerClientX,
+      clientY: state.lastPointerClientY
+    });
+    if (!nextElement) {
+      showToast("当前元素没有可选子级");
+      return true;
+    }
+    rememberSelectableChild(currentElement, nextElement);
+  }
+
+  replaceSingleSelectionTarget(createElementTarget(nextElement));
+  showToast(direction === "parent" ? "已选择父元素" : "已选择子元素");
+  return true;
+}
+
 function toggleTargetSelection(target) {
   pruneSelectedTargets();
   const previous = snapshotSelection();
@@ -348,6 +414,8 @@ function handlePointerMove(event) {
     return;
   }
 
+  updateLastPointerPosition(event.clientX, event.clientY);
+
   updateHoveredNumberInput(event.target, event.altKey);
 
   if (state.fillPopoverDragSession) {
@@ -431,6 +499,8 @@ function handlePointerDown(event) {
   if (!state.active || event.button !== 0) {
     return;
   }
+
+  updateLastPointerPosition(event.clientX, event.clientY);
 
   const modeButton = event.target instanceof Element ? event.target.closest('#chat-context-picker-toolbar [data-action="set-mode"]') : null;
 
@@ -530,6 +600,8 @@ function handlePointerUp(event) {
   if (!state.active) {
     return;
   }
+
+  updateLastPointerPosition(event.clientX, event.clientY);
 
   if (state.fillPopoverDragSession) {
     if (!state.fillPopoverDragSession.managedLocally) {
@@ -691,6 +763,9 @@ function deactivatePicker() {
   state.active = false;
   state.hoveredTarget = null;
   state.hoveredSelectedTarget = null;
+  state.hierarchyChildMemory = new WeakMap();
+  state.lastPointerClientX = null;
+  state.lastPointerClientY = null;
   setSelectedHighlightsVisible(false);
   setListOpen(false);
   closePromptPopover();
@@ -785,6 +860,27 @@ function handleKeyDown(event) {
   if (isCopyCommand && state.selectedTargets.length) {
     event.preventDefault();
     copySelection();
+    return;
+  }
+
+  const isHierarchyNavigationKey =
+    event.key === "Enter" &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey;
+  if (
+    isHierarchyNavigationKey &&
+    (state.selectionMode === "select" ||
+      state.selectionMode === "layout" ||
+      state.selectionMode === "adjust") &&
+    state.selectedTargets.length > 0 &&
+    !isEditingText &&
+    !isPromptOpen() &&
+    !isAdjustOpen() &&
+    !isToolbarElement(event.target)
+  ) {
+    event.preventDefault();
+    navigateSelectionHierarchy(event.shiftKey ? "parent" : "child");
     return;
   }
 
