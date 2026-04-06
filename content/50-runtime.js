@@ -432,6 +432,8 @@ function handlePointerDown(event) {
     return;
   }
 
+  const modeButton = event.target instanceof Element ? event.target.closest('#chat-context-picker-toolbar [data-action="set-mode"]') : null;
+
   const numberInput =
     event.target instanceof Element ? event.target.closest('input[data-chat-context-picker-numeric="true"]') : null;
   if (event.altKey && numberInput instanceof HTMLInputElement && beginNumberInputDrag(numberInput, event)) {
@@ -441,6 +443,10 @@ function handlePointerDown(event) {
 
   if (isPromptOpen()) {
     const clickedInsidePrompt = Boolean(event.target?.closest?.(".chat-context-picker-prompt-popover"));
+    if (modeButton) {
+      savePromptChanges();
+      return;
+    }
     if (!clickedInsidePrompt) {
       consumeInteractionEvent(event);
       state.suppressClickUntil = Date.now() + 400;
@@ -457,6 +463,10 @@ function handlePointerDown(event) {
     const clickedInsideGapMenu = Boolean(event.target?.closest?.(".chat-context-picker-gap-menu"));
     const clickedInsideFillPopover = Boolean(event.target?.closest?.(".chat-context-picker-fill-popover"));
     const clickedInsideShadowPopover = Boolean(event.target?.closest?.(".chat-context-picker-shadow-popover"));
+    if (modeButton) {
+      closeAdjustPopover();
+      return;
+    }
     if (clickedInsideAdjust || clickedInsideSizeMenu || clickedInsideGapMenu || clickedInsideFillPopover || clickedInsideShadowPopover) {
       return;
     }
