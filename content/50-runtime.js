@@ -504,8 +504,7 @@ function handlePointerDown(event) {
 
   const modeButton = event.target instanceof Element ? event.target.closest('#chat-context-picker-toolbar [data-action="set-mode"]') : null;
 
-  const numberInput =
-    event.target instanceof Element ? event.target.closest('input[data-chat-context-picker-numeric="true"]') : null;
+  const numberInput = resolveNumberInputTarget(event.target);
   if (event.altKey && numberInput instanceof HTMLInputElement && beginNumberInputDrag(numberInput, event)) {
     consumeInteractionEvent(event);
     return;
@@ -828,8 +827,7 @@ function handleKeyDown(event) {
     return;
   }
 
-  state.altKeyPressed = event.altKey;
-  syncNumberInputReadyCursor();
+  updateHoveredNumberInputFromPointerState(event.altKey || event.key === "Alt");
 
   if (event.key === "Escape") {
     event.preventDefault();
@@ -908,7 +906,7 @@ function handleKeyUp(event) {
     return;
   }
 
-  state.altKeyPressed = event.altKey;
+  state.altKeyPressed = event.altKey && event.key !== "Alt";
   syncNumberInputReadyCursor();
 }
 

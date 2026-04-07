@@ -678,8 +678,48 @@ function getNumberInputDragConfig(input) {
 }
 
 function resolveNumberInputTarget(target) {
+  if (
+    target instanceof Element &&
+    target.closest(".chat-context-picker-number-drag-ready-overlay") &&
+    getNumberInputDragConfig(state.numberDragReadyInput)
+  ) {
+    return state.numberDragReadyInput;
+  }
   const input = target instanceof Element ? target.closest('input[data-chat-context-picker-numeric="true"]') : null;
   return getNumberInputDragConfig(input) ? input : null;
+}
+
+function removeNumberInputReadyOverlay() {
+  state.numberDragReadyOverlay?.remove();
+  state.numberDragReadyOverlay = null;
+}
+
+function syncNumberInputReadyOverlay(input) {
+  if (!input || !document.body) {
+    removeNumberInputReadyOverlay();
+    return;
+  }
+
+  const rect = input.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    removeNumberInputReadyOverlay();
+    return;
+  }
+
+  if (!state.numberDragReadyOverlay) {
+    const overlay = document.createElement("div");
+    overlay.className = "chat-context-picker-number-drag-ready-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.appendChild(overlay);
+    state.numberDragReadyOverlay = overlay;
+  }
+
+  Object.assign(state.numberDragReadyOverlay.style, {
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`
+  });
 }
 
 function syncNumberInputReadyCursor() {
@@ -695,6 +735,31 @@ function syncNumberInputReadyCursor() {
     !state.numberDragSession && state.altKeyPressed && state.hoveredNumberInput instanceof HTMLInputElement
       ? state.hoveredNumberInput
       : null;
+  if (state.numberDragReadyInput && state.numberDragReadyInput !== nextReadyInput) {
+    delete state.numberDragReadyInput.dataset.chatContextPickerNumberDragReady;
+    state.numberDragReadyInput.style.cursor = state.numberDragReadyPreviousInputCursor || "";
+    removeNumberInputReadyOverlay();
+    state.numberDragReadyInput = null;
+    state.numberDragReadyPreviousInputCursor = null;
+  }
+  if (nextReadyInput && state.numberDragReadyInput !== nextReadyInput) {
+    state.numberDragReadyInput = nextReadyInput;
+    state.numberDragReadyPreviousInputCursor = nextReadyInput.style.cursor;
+    nextReadyInput.dataset.chatContextPickerNumberDragReady = "true";
+    nextReadyInput.style.cursor = "ew-resize";
+  }
+  if (nextReadyInput) {
+    syncNumberInputReadyOverlay(nextReadyInput);
+  } else {
+    removeNumberInputReadyOverlay();
+  }
+  if (nextReadyInput && state.numberDragReadyPreviousCursor === null) {
+    state.numberDragReadyPreviousCursor = document.documentElement.style.cursor;
+    document.documentElement.style.cursor = "ew-resize";
+  } else if (!nextReadyInput && state.numberDragReadyPreviousCursor !== null) {
+    document.documentElement.style.cursor = state.numberDragReadyPreviousCursor || "";
+    state.numberDragReadyPreviousCursor = null;
+  }
   document.documentElement.classList.toggle("chat-context-picker-number-drag-ready", Boolean(nextReadyInput));
 }
 
@@ -702,6 +767,17 @@ function updateHoveredNumberInput(target, altKey = state.altKeyPressed) {
   state.hoveredNumberInput = resolveNumberInputTarget(target);
   state.altKeyPressed = Boolean(altKey);
   syncNumberInputReadyCursor();
+}
+
+function updateHoveredNumberInputFromPointerState(altKey = state.altKeyPressed) {
+  let target = null;
+  if (Number.isFinite(state.lastPointerClientX) && Number.isFinite(state.lastPointerClientY)) {
+    target = document.elementFromPoint(state.lastPointerClientX, state.lastPointerClientY);
+  }
+  if (!target && document.activeElement instanceof Element) {
+    target = document.activeElement;
+  }
+  updateHoveredNumberInput(target, altKey);
 }
 
 function clearNumberInputHoverState() {
@@ -715,13 +791,23 @@ function beginNumberInputDrag(input, event) {
   if (!config) {
     return false;
   }
+  if (state.numberDragReadyInput) {
+    delete state.numberDragReadyInput.dataset.chatContextPickerNumberDragReady;
+    state.numberDragReadyInput.style.cursor = state.numberDragReadyPreviousInputCursor || "";
+    removeNumberInputReadyOverlay();
+    state.numberDragReadyInput = null;
+    state.numberDragReadyPreviousInputCursor = null;
+  }
+  const previousReadyCursor = state.numberDragReadyPreviousCursor;
+  state.numberDragReadyPreviousCursor = null;
+  document.documentElement.classList.remove("chat-context-picker-number-drag-ready");
 
   state.numberDragSession = {
     ...config,
     startX: event.clientX,
     lastValue: config.initialValue,
     changed: false,
-    previousCursor: document.documentElement.style.cursor,
+    previousCursor: previousReadyCursor !== null ? previousReadyCursor : document.documentElement.style.cursor,
     previousUserSelect: document.documentElement.style.userSelect
   };
   state.suppressClickUntil = Date.now() + 400;
