@@ -145,6 +145,335 @@ function bindAdjustHighlightSuppression(container) {
   );
 }
 
+function isChatContextPickerUiNode(node) {
+  if (!(node instanceof Node)) {
+    return false;
+  }
+
+  const element = node instanceof Element ? node : node.parentElement;
+  return Boolean(
+    element?.closest?.(
+      '[data-chat-context-picker-ui="true"], #chat-context-picker-toolbar, #chat-context-picker-overlay-layer'
+    )
+  );
+}
+
+function isHoverLockEvent(event) {
+  if (!state.hoverLock) {
+    return false;
+  }
+
+  if (event.type === "mousemove" || event.type === "pointermove") {
+    if (state.fillPopoverDragSession || state.numberDragSession) {
+      return false;
+    }
+    return isChatContextPickerUiNode(event.target);
+  }
+
+  if (!isChatContextPickerUiNode(event.relatedTarget)) {
+    return false;
+  }
+
+  return !isChatContextPickerUiNode(event.target);
+}
+
+function handleHoverLockLeaveEvent(event) {
+  if (!isHoverLockEvent(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+}
+
+function copyComputedStyleTree(sourceRoot, cloneRoot) {
+  const queue = [[sourceRoot, cloneRoot]];
+  let copied = 0;
+
+  while (queue.length && copied < 300) {
+    const [source, clone] = queue.shift();
+    if (!(source instanceof Element) || !(clone instanceof Element)) {
+      continue;
+    }
+
+    const styles = window.getComputedStyle(source);
+    for (let index = 0; index < styles.length; index += 1) {
+      const prop = styles[index];
+      clone.style.setProperty(prop, styles.getPropertyValue(prop), styles.getPropertyPriority(prop));
+    }
+
+    const sourceChildren = [...source.children];
+    const cloneChildren = [...clone.children];
+    sourceChildren.forEach((sourceChild, index) => {
+      const cloneChild = cloneChildren[index];
+      if (cloneChild instanceof Element) {
+        queue.push([sourceChild, cloneChild]);
+      }
+    });
+    copied += 1;
+  }
+}
+
+function createHoverLockMirrorEntry(targetElement, { append = true } = {}) {
+  const rect = targetElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.dataset.chatContextPickerUi = "true";
+  wrapper.style.position = "absolute";
+  wrapper.style.left = `${rect.left + window.scrollX}px`;
+  wrapper.style.top = `${rect.top + window.scrollY}px`;
+  wrapper.style.width = `${rect.width}px`;
+  wrapper.style.height = `${rect.height}px`;
+  wrapper.style.margin = "0";
+  wrapper.style.padding = "0";
+  wrapper.style.border = "0";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.overflow = "visible";
+  wrapper.style.zIndex = "2147483645";
+
+  const clone = targetElement.cloneNode(true);
+  if (!(clone instanceof Element)) {
+    return null;
+  }
+
+  copyComputedStyleTree(targetElement, clone);
+  clone.style.position = "static";
+  clone.style.left = "auto";
+  clone.style.top = "auto";
+  clone.style.right = "auto";
+  clone.style.bottom = "auto";
+  clone.style.margin = "0";
+  clone.style.transform = "none";
+  clone.style.pointerEvents = "none";
+  clone.style.boxSizing = "border-box";
+  clone.style.width = `${rect.width}px`;
+  clone.style.height = `${rect.height}px`;
+  wrapper.appendChild(clone);
+  if (append) {
+    document.documentElement.appendChild(wrapper);
+  }
+
+  return { wrapper, clone };
+}
+
+function rectsIntersect(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function getHoverLockFloatingMirrorCandidates(targetElement) {
+  const targetRect = targetElement.getBoundingClientRect();
+  const searchRect = {
+    left: targetRect.left - 420,
+    top: targetRect.top - 420,
+    right: targetRect.right + 420,
+    bottom: targetRect.bottom + 420
+  };
+
+  return [...document.body.querySelectorAll("*")]
+    .slice(0, 2000)
+    .filter((element) => {
+      if (
+        !(element instanceof Element) ||
+        element === targetElement ||
+        targetElement.contains(element) ||
+        element.contains(targetElement) ||
+        isChatContextPickerUiNode(element)
+      ) {
+        return false;
+      }
+
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || !rectsIntersect(rect, searchRect)) {
+        return false;
+      }
+
+      const styles = window.getComputedStyle(element);
+      if (styles.display === "none" || styles.visibility === "hidden" || Number.parseFloat(styles.opacity || "1") <= 0) {
+        return false;
+      }
+
+      return ["fixed", "absolute", "sticky"].includes(styles.position) || styles.zIndex !== "auto";
+    })
+    .filter((element, index, candidates) => !candidates.some((other, otherIndex) => otherIndex < index && other.contains(element)))
+    .sort((a, b) => {
+      const aRect = a.getBoundingClientRect();
+      const bRect = b.getBoundingClientRect();
+      return aRect.width * aRect.height - bRect.width * bRect.height;
+    })
+    .slice(0, 6);
+}
+
+function createHoverLockMirror(targetElement, { append = true } = {}) {
+  const primary = createHoverLockMirrorEntry(targetElement, { append });
+  if (!primary) {
+    return null;
+  }
+
+  return {
+    ...primary,
+    extraMirrors: getHoverLockFloatingMirrorCandidates(targetElement)
+      .map((candidate) => createHoverLockMirrorEntry(candidate, { append }))
+      .filter(Boolean)
+  };
+}
+
+function removeHoverLockMirror(mirror) {
+  mirror?.wrapper?.remove();
+  mirror?.extraMirrors?.forEach((extraMirror) => {
+    extraMirror.wrapper?.remove();
+  });
+}
+
+function appendHoverLockMirror(mirror) {
+  if (!mirror) {
+    return;
+  }
+
+  mirror.wrapper && document.documentElement.appendChild(mirror.wrapper);
+  mirror.extraMirrors?.forEach((extraMirror) => {
+    extraMirror.wrapper && document.documentElement.appendChild(extraMirror.wrapper);
+  });
+}
+
+function prepareHoverLockSnapshot(target) {
+  const targetElement = target ? getTargetElement(target) : null;
+  if (!(targetElement instanceof Element)) {
+    clearHoverLockSnapshot();
+    return;
+  }
+
+  if (state.hoverLockSnapshot?.targetElement === targetElement) {
+    return;
+  }
+
+  clearHoverLockSnapshot();
+  state.hoverLockSnapshot = {
+    targetElement,
+    mirror: createHoverLockMirror(targetElement, { append: false })
+  };
+}
+
+function clearHoverLockSnapshot() {
+  if (!state.hoverLockSnapshot) {
+    return;
+  }
+
+  removeHoverLockMirror(state.hoverLockSnapshot.mirror);
+  state.hoverLockSnapshot = null;
+}
+
+function syncHoverLockMirrorFromTarget() {
+  const lock = state.hoverLock;
+  if (!lock?.mirror?.clone || !(lock.targetElement instanceof Element)) {
+    return;
+  }
+
+  const rect = lock.targetElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+
+  ADJUSTABLE_STYLE_PROPS.forEach((prop) => {
+    lock.mirror.clone.style[prop] = lock.targetElement.style[prop] || lock.mirror.baselineSelf[prop] || "";
+  });
+
+  const sourceChildren = [...lock.targetElement.children];
+  const cloneChildren = [...lock.mirror.clone.children];
+  sourceChildren.forEach((sourceChild, index) => {
+    const cloneChild = cloneChildren[index];
+    const baseline = lock.mirror.baselineChildren[index] || {};
+    if (!(cloneChild instanceof Element)) {
+      return;
+    }
+    ADJUSTABLE_CHILD_MARGIN_PROPS.forEach((prop) => {
+      cloneChild.style[prop] = sourceChild.style[prop] || baseline[prop] || "";
+    });
+  });
+}
+
+function endHoverLock() {
+  if (!state.hoverLock) {
+    return;
+  }
+
+  state.hoverLock.release();
+  if (state.hoverLock.target?.adjustPreserveSelection && state.hoverLock.mirror) {
+    removeHoverLockMirror(state.hoverLock.mirror);
+    state.hoverLock.target.adjustPreserveMirror = state.hoverLock.mirror;
+  } else {
+    removeHoverLockMirror(state.hoverLock.mirror);
+  }
+  state.hoverLock = null;
+}
+
+function beginHoverLockForTarget(target, source = "adjust") {
+  const targetElement = target ? getTargetElement(target) : null;
+  if (!(targetElement instanceof Element)) {
+    endHoverLock();
+    return;
+  }
+
+  if (state.hoverLock?.targetElement === targetElement) {
+    return;
+  }
+
+  endHoverLock();
+  const eventTypes = ["mouseout", "mouseleave", "pointerout", "pointerleave", "mousemove", "pointermove"];
+  eventTypes.forEach((eventType) => {
+    document.addEventListener(eventType, handleHoverLockLeaveEvent, true);
+    window.addEventListener(eventType, handleHoverLockLeaveEvent, true);
+  });
+  const snapshot = state.hoverLockSnapshot?.targetElement === targetElement ? state.hoverLockSnapshot : null;
+  const mirror = target.adjustPreserveMirror || snapshot?.mirror || createHoverLockMirror(targetElement);
+  target.adjustPreserveMirror = null;
+  if (snapshot) {
+    appendHoverLockMirror(mirror);
+    state.hoverLockSnapshot = null;
+  } else if (mirror) {
+    appendHoverLockMirror(mirror);
+  } else {
+    clearHoverLockSnapshot();
+  }
+  state.hoverLock = {
+    target,
+    source,
+    targetElement,
+    mirror: mirror
+      ? {
+          ...mirror,
+          baselineSelf: ADJUSTABLE_STYLE_PROPS.reduce((baseline, prop) => {
+            baseline[prop] = mirror.clone.style[prop] || "";
+            return baseline;
+          }, {}),
+          baselineChildren: [...mirror.clone.children].map((child) =>
+            ADJUSTABLE_CHILD_MARGIN_PROPS.reduce((baseline, prop) => {
+              baseline[prop] = child.style[prop] || "";
+              return baseline;
+            }, {})
+          )
+        }
+      : null,
+    release: () => {
+      eventTypes.forEach((eventType) => {
+        document.removeEventListener(eventType, handleHoverLockLeaveEvent, true);
+        window.removeEventListener(eventType, handleHoverLockLeaveEvent, true);
+      });
+    }
+  };
+}
+
+function beginHoverLockForAdjustTarget(target) {
+  beginHoverLockForTarget(target, "adjust");
+}
+
+function beginHoverLockForPromptTarget(target) {
+  beginHoverLockForTarget(target, "prompt");
+}
+
 function getPromptSuggestions(target) {
   const element = getTargetElement(target);
   const tag = element.tagName.toLowerCase();
@@ -310,7 +639,30 @@ function getTargetClientRects(target) {
     return getTextNodeClientRects(target.node);
   }
 
-  const rect = target.element.getBoundingClientRect();
+  let element = target.element;
+  let rect = element.getBoundingClientRect();
+  if (
+    (rect.width <= 0 || rect.height <= 0) &&
+    state.hoverLock?.targetElement === target.element &&
+    state.hoverLock?.mirror?.clone instanceof Element
+  ) {
+    element = state.hoverLock.mirror.clone;
+    rect = element.getBoundingClientRect();
+  }
+
+  if ((rect.width <= 0 || rect.height <= 0) && target.adjustPreservePageRect) {
+    rect = {
+      left: target.adjustPreservePageRect.left - window.scrollX,
+      top: target.adjustPreservePageRect.top - window.scrollY,
+      right: target.adjustPreservePageRect.right - window.scrollX,
+      bottom: target.adjustPreservePageRect.bottom - window.scrollY,
+      width: target.adjustPreservePageRect.width,
+      height: target.adjustPreservePageRect.height,
+      x: target.adjustPreservePageRect.left - window.scrollX,
+      y: target.adjustPreservePageRect.top - window.scrollY
+    };
+  }
+
   if (rect.width <= 0 || rect.height <= 0) {
     return [];
   }
@@ -399,7 +751,7 @@ function buildSelectionItemPromptMarkup(target) {
         return "排版变动";
       }
       if (entry.type === "adjust") {
-        return "调整变动";
+        return `调整变动：${truncate(entry.text, 80)}`;
       }
       return "";
     })

@@ -175,6 +175,22 @@ function ensureToolbar() {
     </div>
   `;
 
+  const isolateToolbarPointerEvent = (event) => {
+    const actionTarget = event.target?.closest?.("[data-action]");
+    if (!actionTarget) {
+      return;
+    }
+
+    if (actionTarget.dataset.action === "set-mode") {
+      event.preventDefault();
+    }
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+  };
+
+  toolbar.addEventListener("pointerdown", isolateToolbarPointerEvent, true);
+  toolbar.addEventListener("mousedown", isolateToolbarPointerEvent, true);
+
   toolbar.addEventListener("click", async (event) => {
     event.stopPropagation();
 

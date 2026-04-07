@@ -38,6 +38,27 @@ const DEFAULT_BASE_FILL_ALPHA = 1;
 const DEFAULT_BASE_FILL_CSS = buildAdjustColorCss(DEFAULT_BASE_FILL_HEX, DEFAULT_BASE_FILL_ALPHA);
 const DEFAULT_FILL_OVERLAY_LAYER = `linear-gradient(${DEFAULT_FILL_CSS}, ${DEFAULT_FILL_CSS})`;
 const DEFAULT_SHADOW_ALPHA = 0.2;
+
+function getAdjustTargetElement(target) {
+  const element = getTargetElement(target);
+  if (!(element instanceof Element)) {
+    return element;
+  }
+
+  const lock = state.hoverLock;
+  const mirrorClone = lock?.mirror?.clone;
+  if (!(mirrorClone instanceof Element) || lock.targetElement !== element) {
+    return element;
+  }
+
+  const rect = element.getBoundingClientRect();
+  const styles = window.getComputedStyle(element);
+  if (rect.width > 0 && rect.height > 0 && styles.display !== "none" && styles.visibility !== "hidden") {
+    return element;
+  }
+
+  return mirrorClone;
+}
 const DEFAULT_SHADOW_X = 0;
 const DEFAULT_SHADOW_Y = 4;
 const DEFAULT_SHADOW_BLUR = 4;
@@ -867,7 +888,7 @@ function scheduleAdjustShadowHydration(target) {
       return;
     }
 
-    const element = getTargetElement(persistedTarget);
+    const element = getAdjustTargetElement(persistedTarget);
     if (!(element instanceof Element)) {
       return;
     }
@@ -954,6 +975,7 @@ function escapeHtml(value) {
 }
 
 function renderSelectionAndHighlights() {
+  syncHoverLockMirrorFromTarget();
   renderSelection();
   refreshHighlights();
 }
@@ -1619,7 +1641,7 @@ function hydrateAdjustLayerState(target, values = null) {
     return null;
   }
 
-  const element = getTargetElement(persistedTarget);
+  const element = getAdjustTargetElement(persistedTarget);
   const styles = window.getComputedStyle(element);
   const currentValues = values || getAdjustValues(persistedTarget);
   const shadowLayers = getShadowLayers(styles.boxShadow);
@@ -1722,13 +1744,13 @@ function ensureAdjustLayerState(target, values = null) {
   }
   if (!persistedTarget.adjustShadowOuterConfig) {
     const outerLayer = splitShadowLayerStrings(
-      window.getComputedStyle(getTargetElement(persistedTarget)).boxShadow
+      window.getComputedStyle(getAdjustTargetElement(persistedTarget)).boxShadow
     ).find((layer) => !/inset/i.test(layer));
     persistedTarget.adjustShadowOuterConfig = parseShadowConfigFromLayer(outerLayer, "outer");
   }
   if (!persistedTarget.adjustShadowInnerConfig) {
     const innerLayer = splitShadowLayerStrings(
-      window.getComputedStyle(getTargetElement(persistedTarget)).boxShadow
+      window.getComputedStyle(getAdjustTargetElement(persistedTarget)).boxShadow
     ).find((layer) => /inset/i.test(layer));
     persistedTarget.adjustShadowInnerConfig = parseShadowConfigFromLayer(innerLayer, "inner");
   }
@@ -1749,7 +1771,7 @@ function applyFillLayerState(target) {
     return;
   }
 
-  const element = getTargetElement(persistedTarget);
+  const element = getAdjustTargetElement(persistedTarget);
   if (!(element instanceof Element)) {
     return;
   }
@@ -1794,7 +1816,7 @@ function applyShadowLayerState(target) {
   }
   persistedTarget.adjustShadowStateDirty = true;
 
-  const element = getTargetElement(persistedTarget);
+  const element = getAdjustTargetElement(persistedTarget);
   if (!(element instanceof Element)) {
     return;
   }
@@ -1837,7 +1859,7 @@ function getParentFlexContext(element) {
 }
 
 function getAdjustSizeMode(target, prop) {
-  const element = getTargetElement(target);
+  const element = getAdjustTargetElement(target);
   if (!(element instanceof Element)) {
     return "fixed";
   }
@@ -1894,7 +1916,7 @@ function getAdjustSizeMode(target, prop) {
 }
 
 function getAdjustValues(target) {
-  const element = getTargetElement(target);
+  const element = getAdjustTargetElement(target);
   const styles = window.getComputedStyle(element);
   const rect = element.getBoundingClientRect();
   const isFlex = styles.display === "flex" || styles.display === "inline-flex";
@@ -1975,7 +1997,7 @@ function physicalPositionToFlex(value) {
 }
 
 function getAdjustGapMode(target) {
-  const element = getTargetElement(target);
+  const element = getAdjustTargetElement(target);
   if (!(element instanceof Element)) {
     return "gap";
   }
@@ -2265,7 +2287,31 @@ function refreshAdjustPromptText(target) {
     return;
   }
 
-  persistedTarget.adjustPromptText = getAdjustPromptText(persistedTarget);
+  const promptText = getAdjustPromptText(persistedTarget);
+  persistedTarget.adjustPromptText = promptText;
+  persistedTarget.adjustPreserveSelection = true;
+  const rect = mergeRects(getTargetClientRects(persistedTarget));
+  if (rect) {
+    persistedTarget.adjustPreserveRect = rect;
+    persistedTarget.adjustPreservePageRect = {
+      left: rect.left + window.scrollX,
+      top: rect.top + window.scrollY,
+      right: rect.right + window.scrollX,
+      bottom: rect.bottom + window.scrollY,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+  const selectedTarget = state.selectedTargets.find((item) => isSameTarget(item, persistedTarget));
+  if (selectedTarget) {
+    selectedTarget.adjustPromptText = promptText;
+    selectedTarget.adjustPreserveSelection = true;
+    if (rect) {
+      selectedTarget.adjustPreserveRect = rect;
+      selectedTarget.adjustPreservePageRect = persistedTarget.adjustPreservePageRect;
+    }
+  }
+  renderSelection();
 }
 
 function getVisibleOrStoredBackgroundColor(target = state.adjustTarget) {
@@ -3286,7 +3332,7 @@ function applyAdjustGapMode(mode, { commit = false } = {}) {
     return;
   }
 
-  const element = getTargetElement(state.adjustTarget);
+  const element = getAdjustTargetElement(state.adjustTarget);
   if (!(element instanceof Element)) {
     return;
   }
@@ -3346,7 +3392,7 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
     return;
   }
 
-  const element = getTargetElement(state.adjustTarget);
+  const element = getAdjustTargetElement(state.adjustTarget);
   if (!(element instanceof Element)) {
     return;
   }
@@ -3789,7 +3835,7 @@ function positionAdjustPopover(target, anchorRect = null) {
     return;
   }
 
-  const rect = mergeRects(getTargetClientRects(target)) || getTargetElement(target).getBoundingClientRect();
+  const rect = mergeRects(getTargetClientRects(target)) || getAdjustTargetElement(target).getBoundingClientRect();
   const popoverWidth = Math.min(state.adjustPopover.offsetWidth || 320, window.innerWidth - 32);
   const popoverHeight = Math.min(state.adjustPopover.offsetHeight || 680, window.innerHeight - 32);
   const viewportPadding = 16;
@@ -3823,7 +3869,7 @@ function commitAdjustChanges() {
     return;
   }
 
-  const element = getTargetElement(state.adjustTarget);
+  const element = getAdjustTargetElement(state.adjustTarget);
   const currentSnapshot = captureAdjustableStyleSnapshot(element);
   if (!state.adjustStyleBaseline || areStyleSnapshotsEqual(state.adjustStyleBaseline, currentSnapshot)) {
     return;
@@ -3858,7 +3904,8 @@ function openAdjustPopover(target, anchorRect = null) {
   }
   setAdjustPromptBaselines(persistedTarget);
   state.adjustTarget = persistedTarget;
-  state.adjustStyleBaseline = captureAdjustableStyleSnapshot(getTargetElement(persistedTarget));
+  beginHoverLockForAdjustTarget(persistedTarget);
+  state.adjustStyleBaseline = captureAdjustableStyleSnapshot(getAdjustTargetElement(persistedTarget));
   clearAdjustLayerSelection();
   syncAdjustPopoverFromTarget(persistedTarget);
   positionAdjustPopover(persistedTarget, anchorRect);
@@ -3881,6 +3928,7 @@ function closeAdjustPopover() {
   closeGapMenu();
   closeFillPopover();
   closeShadowPopover();
+  endHoverLock();
   state.adjustPopover.dataset.open = "false";
   state.adjustTarget = null;
   state.adjustTargetHighlightPointerActive = false;
@@ -3895,7 +3943,7 @@ function applyAdjustAlignment(horizontal, vertical, { commit = false } = {}) {
     return;
   }
 
-  const element = getTargetElement(state.adjustTarget);
+  const element = getAdjustTargetElement(state.adjustTarget);
   if (!(element instanceof Element)) {
     return;
   }
@@ -3957,7 +4005,7 @@ function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}
     return;
   }
 
-  const element = getTargetElement(state.adjustTarget);
+  const element = getAdjustTargetElement(state.adjustTarget);
   if (!(element instanceof Element)) {
     return;
   }

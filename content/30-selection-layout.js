@@ -173,6 +173,17 @@ function isLiveTarget(target) {
     );
   }
 
+  if (
+    state.hoverLock?.targetElement === target.element &&
+    state.hoverLock?.mirror?.clone instanceof Element
+  ) {
+    return true;
+  }
+
+  if (target.adjustPreserveSelection && (target.adjustPromptText || target.promptText || target.layoutPromptText)) {
+    return true;
+  }
+
   return Boolean(target.element?.isConnected && isSelectableElement(target.element));
 }
 
@@ -871,6 +882,9 @@ function clearHover() {
   state.hoveredTarget = null;
   state.hoveredSelectedTarget = null;
   state.layoutInsertHint = null;
+  if (!state.hoverLock) {
+    clearHoverLockSnapshot();
+  }
   refreshHighlights();
 }
 
@@ -933,6 +947,9 @@ function setHover(target) {
     }
     state.hoveredTarget = null;
     state.hoveredSelectedTarget = target;
+    if (state.selectionMode === "adjust") {
+      prepareHoverLockSnapshot(target);
+    }
     refreshHighlights();
     return;
   }
@@ -943,6 +960,9 @@ function setHover(target) {
 
   state.hoveredTarget = target;
   state.hoveredSelectedTarget = null;
+  if (state.selectionMode === "adjust") {
+    prepareHoverLockSnapshot(target);
+  }
   refreshHighlights();
 }
 
@@ -1620,6 +1640,7 @@ function openPromptPopover(target, anchorRect = null) {
     discardPromptChanges();
   }
   const persistedTarget = findSelectedTarget(target) || target;
+  beginHoverLockForPromptTarget(persistedTarget);
   state.promptTarget = persistedTarget;
   state.promptDraftValue = persistedTarget.promptText || "";
   state.promptSavedSelectionMode = state.selectionMode;
@@ -1652,6 +1673,7 @@ function closePromptPopover() {
   }
 
   state.promptPopover.dataset.open = "false";
+  endHoverLock();
   state.promptTarget = null;
   state.promptDraftValue = "";
   state.promptSavedSelectionMode = null;
@@ -1671,6 +1693,29 @@ function savePromptChanges() {
   const persistedTarget = findSelectedTarget(state.promptTarget) || state.promptTarget;
   const previous = snapshotSelection();
   persistedTarget.promptText = state.promptTextarea.value.trim();
+  persistedTarget.adjustPreserveSelection = true;
+  const rect = mergeRects(getTargetClientRects(persistedTarget));
+  if (rect) {
+    persistedTarget.adjustPreserveRect = rect;
+    persistedTarget.adjustPreservePageRect = {
+      left: rect.left + window.scrollX,
+      top: rect.top + window.scrollY,
+      right: rect.right + window.scrollX,
+      bottom: rect.bottom + window.scrollY,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+  const selectedTarget = state.selectedTargets.find((item) => isSameTarget(item, persistedTarget));
+  if (selectedTarget) {
+    selectedTarget.promptText = persistedTarget.promptText;
+    selectedTarget.adjustPreserveSelection = true;
+    selectedTarget.adjustPreserveMirror = persistedTarget.adjustPreserveMirror;
+    if (rect) {
+      selectedTarget.adjustPreserveRect = persistedTarget.adjustPreserveRect;
+      selectedTarget.adjustPreservePageRect = persistedTarget.adjustPreservePageRect;
+    }
+  }
   state.promptTarget = persistedTarget;
   if (!areSelectionsEqual(previous, state.selectedTargets)) {
     pushSelectionHistory(previous);

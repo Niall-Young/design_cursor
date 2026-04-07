@@ -546,6 +546,15 @@ function handlePointerDown(event) {
     return;
   }
 
+  if (isToolbarElement(event.target)) {
+    if (modeButton) {
+      event.preventDefault();
+    }
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    return;
+  }
+
   if (
     state.selectionMode !== "select" &&
     state.selectionMode !== "layout" &&

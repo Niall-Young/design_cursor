@@ -31,6 +31,8 @@ const state = {
   promptSavedSelectionMode: null,
   adjustPopover: null,
   adjustTarget: null,
+  hoverLock: null,
+  hoverLockSnapshot: null,
   adjustTargetHighlightSuppressed: false,
   adjustTargetHighlightPointerActive: false,
   adjustControls: {},
