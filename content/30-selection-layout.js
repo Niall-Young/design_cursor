@@ -271,7 +271,7 @@ function drawHighlight(target, variant) {
 }
 
 function drawPromptBadge(target, index) {
-  const rect = mergeRects(getTargetClientRects(target));
+  const rect = mergeRects(getTargetClientRects(target).map(getRectViewportIntersection).filter(Boolean));
   if (!rect) {
     return;
   }
@@ -316,6 +316,34 @@ function drawPromptBadge(target, index) {
   button.addEventListener("click", openBadgeEditor);
 
   state.overlayLayer.appendChild(button);
+}
+
+function getRectViewportIntersection(rect) {
+  const viewportRect = {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight
+  };
+  const left = Math.max(rect.left, viewportRect.left);
+  const right = Math.min(rect.right, viewportRect.right);
+  const top = Math.max(rect.top, viewportRect.top);
+  const bottom = Math.min(rect.bottom, viewportRect.bottom);
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    x: left,
+    y: top
+  };
 }
 
 function getPromptBadgePosition(rect) {
