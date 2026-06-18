@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Design Cursor",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "选中网页元素并复制为适合粘贴到 AI 对话中的结构化上下文。",
   "permissions": [
     "activeTab",

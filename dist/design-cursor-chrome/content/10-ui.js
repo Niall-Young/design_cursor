@@ -90,6 +90,30 @@ function enableSingleClickSelectAll(container) {
   );
 }
 
+function openNativeColorPicker(input) {
+  if (!(input instanceof HTMLInputElement) || input.type !== "color" || input.disabled) {
+    return false;
+  }
+
+  try {
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return true;
+    }
+  } catch (_) {
+    // Fall through to click-based fallback for browsers that reject showPicker.
+  }
+
+  try {
+    input.focus({ preventScroll: true });
+  } catch (_) {
+    input.focus();
+  }
+
+  input.click();
+  return true;
+}
+
 function ensureToolbar() {
   if (state.toolbar) {
     return;
@@ -1396,7 +1420,7 @@ function ensureShadowPopover() {
     }
 
     if (actionTarget.dataset.action === "open-shadow-color-picker") {
-      state.shadowControls.colorInput?.click();
+      openFillPopover(actionTarget.getBoundingClientRect(), { source: "shadow" });
       return;
     }
 

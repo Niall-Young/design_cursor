@@ -2490,6 +2490,18 @@ function getActiveShadowConfig(target = state.adjustTarget, shadowType = state.s
 }
 
 function getActiveFillConfig(target = state.adjustTarget) {
+  if (state.fillPopoverSource === "shadow") {
+    const shadowConfig = getActiveShadowConfig(target, state.shadowPopoverType);
+    if (!shadowConfig) {
+      return null;
+    }
+
+    return (
+      parseAdjustColor(buildAdjustColorCss(shadowConfig.colorHex || DEFAULT_FILL_HEX, shadowConfig.alpha ?? DEFAULT_SHADOW_ALPHA)) ||
+      parseAdjustColor(DEFAULT_FILL_CSS)
+    );
+  }
+
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
     return null;
@@ -2536,8 +2548,9 @@ function renderFillPopoverControls() {
     return;
   }
 
+  const isShadowSource = state.fillPopoverSource === "shadow";
   const isOverlay = state.fillPopoverOverlayIndex !== null;
-  const mode = isOverlay ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
+  const mode = isShadowSource || isOverlay ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
   const solidColor = cloneHsvaColor(
     state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 }
   );
@@ -2552,8 +2565,16 @@ function renderFillPopoverControls() {
   state.fillPopoverGradientActiveStop = activeStopIndex;
   state.fillControls.modeSolid.dataset.state = mode === "solid" ? "active" : "inactive";
   state.fillControls.modeGradient.dataset.state = mode === "gradient" ? "active" : "inactive";
-  state.fillControls.modeGradient.disabled = isOverlay;
-  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay ? "true" : "false");
+  state.fillControls.modeGradient.disabled = isOverlay || isShadowSource;
+  state.fillControls.modeGradient.hidden = isShadowSource;
+  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay || isShadowSource ? "true" : "false");
+  if (state.fillControls.modeSolid) {
+    state.fillControls.modeSolid.hidden = isShadowSource;
+  }
+  if (state.fillControls.modeSolid?.parentElement) {
+    state.fillControls.modeSolid.parentElement.hidden = isShadowSource;
+    state.fillControls.modeSolid.parentElement.style.display = isShadowSource ? "none" : "";
+  }
 
   if (state.fillControls.gradientControls) {
     state.fillControls.gradientControls.hidden = mode !== "gradient";
@@ -2747,6 +2768,23 @@ function syncFillPopoverFromTarget(target = state.adjustTarget) {
     return;
   }
 
+  if (state.fillPopoverSource === "shadow") {
+    const fallbackColor = colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 };
+    const activeConfig = getActiveFillConfig(target);
+    const solidColor =
+      colorStringToHsva(activeConfig?.css || activeConfig?.hex || DEFAULT_FILL_CSS, fallbackColor) || cloneHsvaColor(fallbackColor);
+
+    state.fillPopoverMode = "solid";
+    state.fillPopoverSolidColor = cloneHsvaColor(solidColor);
+    state.fillPopoverGradientStops = ensureGradientStops(null, solidColor);
+    state.fillPopoverGradientAngle = 0;
+    state.fillPopoverGradientActiveStop = 0;
+    state.fillPopoverFormat = ["hex", "rgb", "hsl"].includes(state.fillPopoverFormat) ? state.fillPopoverFormat : "hex";
+    state.fillPopoverFormatMenuOpen = false;
+    renderFillPopoverControls();
+    return;
+  }
+
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
     return;
@@ -2790,6 +2828,16 @@ function applyFillPopoverState({ commit = false, sync = true } = {}) {
 
   const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
   if (!persistedTarget) {
+    return;
+  }
+
+  if (state.fillPopoverSource === "shadow") {
+    const color = cloneHsvaColor(state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 });
+    applyShadowPopoverInput("color", hsvaToHex(color), { commit: false, sync: false });
+    applyShadowPopoverInput("alpha", Math.round(clampAlpha(color.a, 1) * 100), { commit, sync });
+    if (state.fillPopover?.dataset.open === "true") {
+      renderFillPopoverControls();
+    }
     return;
   }
 
@@ -2847,7 +2895,7 @@ function applyFillPopoverState({ commit = false, sync = true } = {}) {
 }
 
 function setActiveFillPopoverColor(nextColor, { commit = false, sync = true } = {}) {
-  if (state.fillPopoverMode === "gradient") {
+  if (state.fillPopoverSource !== "shadow" && state.fillPopoverMode === "gradient") {
     const stops = ensureGradientStops(state.fillPopoverGradientStops, state.fillPopoverSolidColor);
     const index = clampNumber(state.fillPopoverGradientActiveStop, 0, Math.max(0, stops.length - 1), 0);
     stops[index] = {
@@ -2869,7 +2917,7 @@ function setActiveFillPopoverColor(nextColor, { commit = false, sync = true } = 
 }
 
 function setFillPopoverMode(mode, { commit = false, sync = true } = {}) {
-  if (state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -2897,7 +2945,7 @@ function setFillPopoverMode(mode, { commit = false, sync = true } = {}) {
 }
 
 function addFillPopoverGradientStop() {
-  if (state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -2925,7 +2973,7 @@ function addFillPopoverGradientStop() {
 }
 
 function swapFillPopoverGradientStops() {
-  if (state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverMode !== "gradient" || state.fillPopoverOverlayIndex !== null) {
     return;
   }
 
@@ -3186,6 +3234,13 @@ function getFillPopoverAnchorRect() {
     return state.fillPopoverAnchorRect;
   }
 
+  if (state.fillPopoverSource === "shadow") {
+    return (
+      state.shadowControls?.swatch?.closest?.(".chat-context-picker-shadow-color-row")?.getBoundingClientRect?.() ||
+      state.fillPopoverAnchorRect
+    );
+  }
+
   const row =
     state.fillPopoverOverlayIndex !== null
       ? state.adjustPopover.querySelector(
@@ -3219,7 +3274,7 @@ function positionShadowPopover(anchorRect) {
   state.shadowPopover.style.top = `${top}px`;
 }
 
-function openFillPopover(anchorRect = null, { overlayIndex = null } = {}) {
+function openFillPopover(anchorRect = null, { overlayIndex = null, source = "fill" } = {}) {
   if (!state.adjustTarget) {
     return;
   }
@@ -3227,9 +3282,13 @@ function openFillPopover(anchorRect = null, { overlayIndex = null } = {}) {
   ensureFillPopover();
   closeSizeMenu();
   closeGapMenu();
-  closeShadowPopover();
+  if (source !== "shadow") {
+    closeShadowPopover();
+  }
+  state.fillPopoverSource = source === "shadow" ? "shadow" : "fill";
   state.fillPopoverFormatMenuOpen = false;
-  state.fillPopoverOverlayIndex = Number.isInteger(overlayIndex) && overlayIndex >= 0 ? overlayIndex : null;
+  state.fillPopoverOverlayIndex =
+    state.fillPopoverSource === "fill" && Number.isInteger(overlayIndex) && overlayIndex >= 0 ? overlayIndex : null;
   state.fillPopoverAnchorRect = anchorRect || state.fillPopoverAnchorRect;
   syncFillPopoverFromTarget(state.adjustTarget);
   state.fillPopover.dataset.open = "true";
@@ -3270,6 +3329,7 @@ function closeFillPopover() {
   state.fillPopover.dataset.open = "false";
   state.fillPopoverDragSession = null;
   state.fillPopoverFormatMenuOpen = false;
+  state.fillPopoverSource = "fill";
   state.fillPopoverOverlayIndex = null;
   state.fillPopoverAnchorRect = null;
   if (state.adjustTarget) {
@@ -3574,6 +3634,9 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
 }
 
 function closeShadowPopover() {
+  if (state.fillPopover?.dataset.open === "true" && state.fillPopoverSource === "shadow") {
+    closeFillPopover();
+  }
   if (!state.shadowPopover) {
     return;
   }
