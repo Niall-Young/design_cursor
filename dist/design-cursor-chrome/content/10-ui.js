@@ -501,9 +501,8 @@ function ensureAdjustPopover() {
     </div>
     </div>
     <div class="chat-context-picker-adjust-resource-actions" data-adjust-resource-actions hidden>
-      <button class="chat-context-picker-adjust-resource-button" type="button" data-action="download-resource" aria-label="下载资源" title="下载资源">
-        <span class="chat-context-picker-adjust-resource-button-icon">${icon("download")}</span>
-        <span class="chat-context-picker-adjust-resource-button-label">下载资源</span>
+      <button class="chat-context-picker-action-button chat-context-picker-action-button-secondary chat-context-picker-adjust-resource-button" type="button" data-action="download-resource" aria-label="下载资源" title="下载资源">
+        <span>下载资源</span>
       </button>
     </div>
   `;

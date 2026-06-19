@@ -1151,42 +1151,7 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 }
 
 .chat-context-picker-adjust-resource-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 8px;
-  background: #2a59ff;
-  color: #ffffff;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
-}
-
-.chat-context-picker-adjust-resource-button:hover {
-  background: #1f4cf2;
-  box-shadow: 0 8px 18px rgba(42, 89, 255, 0.24);
-}
-
-.chat-context-picker-adjust-resource-button:active {
-  transform: translateY(1px);
-}
-
-.chat-context-picker-adjust-resource-button-icon {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-}
-
-.chat-context-picker-adjust-resource-button-icon svg {
-  width: 100%;
-  height: 100%;
 }
 
 .chat-context-picker-adjust-popover[data-open="true"] {
