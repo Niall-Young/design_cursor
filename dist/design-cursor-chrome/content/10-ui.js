@@ -342,7 +342,7 @@ function ensureAdjustPopover() {
     </div>
     <div class="chat-context-picker-adjust-divider"></div>
     <div class="chat-context-picker-adjust-body">
-    <div class="chat-context-picker-adjust-section">
+    <div class="chat-context-picker-adjust-section" data-adjust-section="layout">
       <div class="chat-context-picker-adjust-section-title">布局</div>
       <div class="chat-context-picker-adjust-segmented" data-control-group="layout-direction">
         <button class="chat-context-picker-adjust-segment chat-context-picker-adjust-segment-icon" type="button" data-adjust-prop="layoutDirection" data-adjust-value="none" aria-label="关闭自动布局" title="关闭自动布局">
@@ -417,7 +417,7 @@ function ensureAdjustPopover() {
         </label>
       </div>
     </div>
-    <div class="chat-context-picker-adjust-divider"></div>
+    <div class="chat-context-picker-adjust-divider" data-adjust-divider="layout"></div>
     <div class="chat-context-picker-adjust-section">
       <div class="chat-context-picker-adjust-section-title">外观</div>
       <div class="chat-context-picker-adjust-grid chat-context-picker-adjust-grid-tight">
@@ -500,6 +500,12 @@ function ensureAdjustPopover() {
       </div>
     </div>
     </div>
+    <div class="chat-context-picker-adjust-resource-actions" data-adjust-resource-actions hidden>
+      <button class="chat-context-picker-adjust-resource-button" type="button" data-action="download-resource" aria-label="下载资源" title="下载资源">
+        <span class="chat-context-picker-adjust-resource-button-icon">${icon("download")}</span>
+        <span class="chat-context-picker-adjust-resource-button-label">下载资源</span>
+      </button>
+    </div>
   `;
 
   popover.addEventListener("click", (event) => {
@@ -544,6 +550,11 @@ function ensureAdjustPopover() {
 
     if (action === "close-adjust") {
       closeAdjustPopover();
+      return;
+    }
+
+    if (action === "download-resource") {
+      downloadAdjustResource();
       return;
     }
 
@@ -601,6 +612,26 @@ function ensureAdjustPopover() {
     if (action === "add-fill") {
       const anchorRect = actionTarget.getBoundingClientRect();
       const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
+      if (!persistedTarget) {
+        return;
+      }
+      if (isSvgResourceTarget(persistedTarget)) {
+        persistedTarget.adjustFillEnabled = true;
+        persistedTarget.adjustFillVisible = true;
+        persistedTarget.adjustFillType = "color";
+        persistedTarget.adjustStoredBackgroundColor = persistedTarget.adjustStoredBackgroundColor || DEFAULT_BASE_FILL_CSS;
+        persistedTarget.adjustStoredBackgroundHex = persistedTarget.adjustStoredBackgroundHex || DEFAULT_BASE_FILL_HEX;
+        persistedTarget.adjustStoredBackgroundImage = "";
+        persistedTarget.adjustFillOverlayLayers = [];
+        applyFillLayerState(persistedTarget);
+        refreshAdjustPromptText(persistedTarget);
+        syncAdjustPopoverFromTarget(persistedTarget);
+        renderSelection();
+        commitAdjustChanges();
+        const row = state.adjustPopover?.querySelector?.('[data-adjust-row="fill"]');
+        openFillPopover(row?.getBoundingClientRect?.() || anchorRect);
+        return;
+      }
       if (persistedTarget.adjustFillEnabled) {
         persistedTarget.adjustFillOverlayLayers = [{
           visible: true,
@@ -932,7 +963,12 @@ function ensureAdjustPopover() {
   state.adjustPopover = popover;
   state.adjustControls = {
     body: popover.querySelector(".chat-context-picker-adjust-body"),
+    title: popover.querySelector(".chat-context-picker-adjust-title"),
     associationModeToggle: popover.querySelector('[data-action="toggle-association-mode"]'),
+    layoutSection: popover.querySelector('[data-adjust-section="layout"]'),
+    layoutDivider: popover.querySelector('[data-adjust-divider="layout"]'),
+    resourceActions: popover.querySelector('[data-adjust-resource-actions]'),
+    resourceDownloadButton: popover.querySelector('[data-action="download-resource"]'),
     fillStack: popover.querySelector('[data-adjust-stack="fill"]'),
     backgroundColorInput: popover.querySelector('[data-adjust-input="backgroundColor"]'),
     backgroundColorText: popover.querySelector('[data-adjust-text="backgroundColor"]'),

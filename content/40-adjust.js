@@ -1,5 +1,6 @@
 // Adjustment mode utilities and the fill/shadow/style editor logic live here.
 const ADJUSTABLE_STYLE_PROPS = [
+  "color",
   "display",
   "flexDirection",
   "justifyContent",
@@ -20,7 +21,10 @@ const ADJUSTABLE_STYLE_PROPS = [
   "backgroundImage",
   "borderRadius",
   "opacity",
-  "boxShadow"
+  "boxShadow",
+  "filter",
+  "fill",
+  "stroke"
 ];
 
 const ADJUSTABLE_CHILD_MARGIN_PROPS = [
@@ -29,6 +33,31 @@ const ADJUSTABLE_CHILD_MARGIN_PROPS = [
   "marginBottom",
   "marginLeft"
 ];
+
+const ADJUSTABLE_SVG_STYLE_PROPS = [
+  "color",
+  "fill",
+  "fillOpacity",
+  "stroke",
+  "strokeOpacity",
+  "strokeWidth",
+  "strokeLinecap",
+  "strokeLinejoin",
+  "filter",
+  "opacity"
+];
+
+const SVG_PAINT_SELECTOR = "path, circle, ellipse, rect, line, polyline, polygon, text, use";
+const ADJUST_LAYOUT_PROPS = new Set([
+  "layoutDirection",
+  "width",
+  "height",
+  "gap",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft"
+]);
 
 const DEFAULT_FILL_HEX = "#000000";
 const DEFAULT_FILL_ALPHA = 0.2;
@@ -1176,7 +1205,12 @@ function refreshAdjustPopoverControlRefs() {
   state.adjustControls = {
     ...state.adjustControls,
     body: state.adjustPopover.querySelector(".chat-context-picker-adjust-body"),
+    title: state.adjustPopover.querySelector(".chat-context-picker-adjust-title"),
     associationModeToggle: state.adjustPopover.querySelector('[data-action="toggle-association-mode"]'),
+    layoutSection: state.adjustPopover.querySelector('[data-adjust-section="layout"]'),
+    layoutDivider: state.adjustPopover.querySelector('[data-adjust-divider="layout"]'),
+    resourceActions: state.adjustPopover.querySelector('[data-adjust-resource-actions]'),
+    resourceDownloadButton: state.adjustPopover.querySelector('[data-action="download-resource"]'),
     fillStack: state.adjustPopover.querySelector('[data-adjust-stack="fill"]'),
     shadowStack: state.adjustPopover.querySelector('[data-adjust-stack="shadow"]'),
     backgroundColorInput: state.adjustPopover.querySelector('[data-adjust-input="backgroundColor"]'),
@@ -1565,7 +1599,8 @@ function renderAdjustLayerRows(target) {
     return;
   }
 
-  const fillLayers = persistedTarget.adjustFillOverlayLayers || [];
+  const isResourceTarget = isSvgResourceTarget(persistedTarget);
+  const fillLayers = isResourceTarget ? [] : (persistedTarget.adjustFillOverlayLayers || []);
   const hasBaseFill = persistedTarget.adjustFillEnabled;
   const hasAnyFillLayer = hasBaseFill || fillLayers.length > 0;
   const isFillPopoverOpen = Boolean(state.fillPopover?.dataset.open === "true" && state.adjustTarget);
@@ -1619,8 +1654,11 @@ function captureAdjustableStyleSnapshot(element) {
         }, {})
       }))
     : [];
+  const svgPaint = element instanceof Element && isSvgResourceElement(element)
+    ? captureSvgStyleSnapshot(element)
+    : [];
 
-  return { self, children };
+  return { self, children, svgPaint };
 }
 
 function applyAdjustableStyleSnapshot(element, snapshot) {
@@ -1647,6 +1685,8 @@ function applyAdjustableStyleSnapshot(element, snapshot) {
       });
     });
   }
+
+  applySvgStyleSnapshot(snapshot.svgPaint);
 }
 
 function areStyleSnapshotsEqual(a, b) {
@@ -1654,6 +1694,10 @@ function areStyleSnapshotsEqual(a, b) {
   const bSelf = b?.self || b || {};
   const ownStylesEqual = ADJUSTABLE_STYLE_PROPS.every((prop) => (aSelf[prop] || "") === (bSelf[prop] || ""));
   if (!ownStylesEqual) {
+    return false;
+  }
+
+  if (!areSvgStyleSnapshotsEqual(a?.svgPaint, b?.svgPaint)) {
     return false;
   }
 
@@ -1818,6 +1862,10 @@ function normalizeFlexChildMargins(element) {
   });
 }
 
+function isAdjustLayoutProp(prop) {
+  return ADJUST_LAYOUT_PROPS.has(prop);
+}
+
 function formatAdjustColorValue(value) {
   const parsed = parseAdjustColor(value);
   return parsed ? parsed.label : "无填充";
@@ -1833,7 +1881,54 @@ function getResolvedBorderRadius(styles, rect) {
   );
 }
 
-function getAdjustFillInfo(styles) {
+function getSvgPaintColor(value, styles) {
+  const normalized = String(value || "").trim();
+  const lower = normalized.toLowerCase();
+  if (!normalized || lower === "none" || lower === "transparent" || lower.startsWith("url(")) {
+    return null;
+  }
+
+  if (lower === "currentcolor") {
+    return parseAdjustColor(styles.color);
+  }
+
+  return parseAdjustColor(normalized);
+}
+
+function getSvgPaintFillInfo(styles, element) {
+  const root = getSvgResourceRoot(element);
+  const paintElements = root instanceof Element ? [...root.querySelectorAll(SVG_PAINT_SELECTOR)].slice(0, 200) : [];
+  const findPaintColor = (prop) => {
+    for (const paintElement of paintElements) {
+      const paintStyles = window.getComputedStyle(paintElement);
+      const color = getSvgPaintColor(paintStyles[prop], paintStyles);
+      if (color) {
+        return color;
+      }
+    }
+    return getSvgPaintColor(styles[prop], styles);
+  };
+  const fillColor = findPaintColor("fill");
+  const strokeColor = findPaintColor("stroke");
+  const color = fillColor || strokeColor || parseAdjustColor(styles.color);
+  const svgPaintProp = fillColor ? "fill" : strokeColor ? "stroke" : "fill";
+
+  return {
+    backgroundColor: color?.hex || "",
+    backgroundColorCss: color?.css || "",
+    backgroundImage: "",
+    backgroundVisible: Boolean(color),
+    fillType: color ? "color" : "none",
+    fillLabel: color ? color.label : "无填充",
+    svgPaintProp
+  };
+}
+
+function getAdjustFillInfo(styles, element = null) {
+  if (isSvgResourceElement(element)) {
+    return getSvgPaintFillInfo(styles, element);
+  }
+
   const backgroundImage = styles.backgroundImage && styles.backgroundImage !== "none" ? styles.backgroundImage : "";
   const parsedColor = parseAdjustColor(styles.backgroundColor);
   const backgroundColor = parsedColor?.hex || "";
@@ -1879,6 +1974,7 @@ function hydrateAdjustLayerState(target, values = null) {
   persistedTarget.adjustStoredBackgroundColor = currentValues.backgroundColorCss || currentValues.backgroundColor || "";
   persistedTarget.adjustStoredBackgroundHex = currentValues.backgroundColor || "";
   persistedTarget.adjustStoredBackgroundImage = currentValues.backgroundImage || "";
+  persistedTarget.adjustSvgPaintProp = currentValues.svgPaintProp || persistedTarget.adjustSvgPaintProp || "fill";
   persistedTarget.adjustFillOverlayLayers = [];
   applyComputedShadowStateToTarget(persistedTarget, styles.boxShadow);
 
@@ -1896,7 +1992,8 @@ function hasPersistedAdjustLayerState(target) {
       Array.isArray(target.adjustAddedOuterShadowLayers) ||
       target.adjustStoredGap !== undefined ||
       target.adjustStoredBackgroundColor !== undefined ||
-      target.adjustStoredBackgroundImage !== undefined
+      target.adjustStoredBackgroundImage !== undefined ||
+      target.adjustSvgPaintProp !== undefined
     )
   );
 }
@@ -1930,7 +2027,13 @@ function ensureAdjustLayerState(target, values = null) {
   if (!persistedTarget.adjustFillType) {
     persistedTarget.adjustFillType = currentValues.fillType || "none";
   }
+  if (isSvgResourceTarget(persistedTarget)) {
+    persistedTarget.adjustSvgPaintProp = currentValues.svgPaintProp || persistedTarget.adjustSvgPaintProp || "fill";
+  }
   if (!Array.isArray(persistedTarget.adjustFillOverlayLayers)) {
+    persistedTarget.adjustFillOverlayLayers = [];
+  }
+  if (isSvgResourceTarget(persistedTarget)) {
     persistedTarget.adjustFillOverlayLayers = [];
   }
   persistedTarget.adjustFillOverlayLayers = (persistedTarget.adjustFillOverlayLayers || []).map((layer) =>
@@ -1991,6 +2094,97 @@ function ensureAdjustLayerState(target, values = null) {
   return persistedTarget;
 }
 
+function getSvgPaintSnapshotElements(element) {
+  const root = getSvgResourceRoot(element);
+  if (!(root instanceof Element)) {
+    return [];
+  }
+
+  return [root, ...root.querySelectorAll(SVG_PAINT_SELECTOR)].slice(0, 500);
+}
+
+function captureSvgStyleSnapshot(element) {
+  return getSvgPaintSnapshotElements(element).map((svgElement) => ({
+    element: svgElement,
+    styles: ADJUSTABLE_SVG_STYLE_PROPS.reduce((snapshot, prop) => {
+      snapshot[prop] = svgElement?.style?.[prop] || "";
+      return snapshot;
+    }, {})
+  }));
+}
+
+function applySvgStyleSnapshot(snapshot) {
+  if (!Array.isArray(snapshot)) {
+    return;
+  }
+
+  snapshot.forEach((entry) => {
+    if (!(entry?.element instanceof Element) || !entry.styles) {
+      return;
+    }
+
+    ADJUSTABLE_SVG_STYLE_PROPS.forEach((prop) => {
+      entry.element.style[prop] = entry.styles[prop] || "";
+    });
+  });
+}
+
+function areSvgStyleSnapshotsEqual(a, b) {
+  const left = Array.isArray(a) ? a : [];
+  const right = Array.isArray(b) ? b : [];
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((entry, index) => {
+    const other = right[index];
+    if (!other || entry.element !== other.element) {
+      return false;
+    }
+
+    return ADJUSTABLE_SVG_STYLE_PROPS.every((prop) => (entry.styles?.[prop] || "") === (other.styles?.[prop] || ""));
+  });
+}
+
+function shouldApplySvgPaintToElement(element, prop, styles) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  if (element.tagName?.toLowerCase?.() === "svg") {
+    return true;
+  }
+
+  const explicitPaint = element.getAttribute(prop) || element.style?.[prop] || "";
+  if (String(explicitPaint).trim().toLowerCase() === "none") {
+    return false;
+  }
+
+  return Boolean(getSvgPaintColor(styles[prop], styles));
+}
+
+function applySvgPaintLayerState(target) {
+  const element = getSvgResourceRoot(getTargetElement(target));
+  if (!(element instanceof Element)) {
+    return;
+  }
+
+  const paintProp = target.adjustSvgPaintProp === "stroke" ? "stroke" : "fill";
+  const paintValue =
+    target.adjustFillEnabled && target.adjustFillVisible
+      ? target.adjustStoredBackgroundColor || target.adjustStoredBackgroundHex || DEFAULT_FILL_CSS
+      : "none";
+  const normalizedPaint = paintValue === "none" ? "none" : (parseAdjustColor(paintValue)?.css || DEFAULT_FILL_CSS);
+
+  getSvgPaintSnapshotElements(element).forEach((svgElement) => {
+    const styles = window.getComputedStyle(svgElement);
+    svgElement.style.color = normalizedPaint === "none" ? "" : normalizedPaint;
+    if (normalizedPaint === "none" || shouldApplySvgPaintToElement(svgElement, paintProp, styles)) {
+      svgElement.style[paintProp] = normalizedPaint;
+    }
+  });
+}
+
 function applyFillLayerState(target) {
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
@@ -1999,6 +2193,12 @@ function applyFillLayerState(target) {
 
   const element = getAdjustTargetElement(persistedTarget);
   if (!(element instanceof Element)) {
+    return;
+  }
+
+  if (isSvgResourceTarget(persistedTarget)) {
+    applySvgPaintLayerState(persistedTarget);
+    syncAssociatedAdjustTargetsFromSource();
     return;
   }
 
@@ -2038,6 +2238,20 @@ function applyFillLayerState(target) {
   syncAssociatedAdjustTargetsFromSource();
 }
 
+function formatShadowConfigToDropShadow(config) {
+  if (!config) {
+    return "";
+  }
+
+  const alpha = clampAlpha(config.alpha, DEFAULT_SHADOW_ALPHA);
+  const color = parseAdjustColor(config.colorHex || DEFAULT_FILL_HEX) || parseAdjustColor(DEFAULT_FILL_HEX);
+  const hex = color?.hex || DEFAULT_FILL_HEX;
+  const red = Number.parseInt(hex.slice(1, 3), 16);
+  const green = Number.parseInt(hex.slice(3, 5), 16);
+  const blue = Number.parseInt(hex.slice(5, 7), 16);
+  return `drop-shadow(${Math.round(config.x)}px ${Math.round(config.y)}px ${Math.round(config.blur)}px rgba(${red}, ${green}, ${blue}, ${alpha}))`;
+}
+
 function applyShadowLayerState(target) {
   const persistedTarget = ensureAdjustLayerState(target);
   if (!persistedTarget) {
@@ -2055,13 +2269,19 @@ function applyShadowLayerState(target) {
     .filter((layer) => layer?.visible !== false)
     .map((layer) => {
       const shadowType = layer?.type === "inner" || layer?.config?.type === "inner" ? "inner" : "outer";
-      return formatShadowConfigToLayer({
+      const config = {
         ...(layer?.config || getDefaultShadowConfig(shadowType)),
         type: shadowType
-      });
+      };
+      return isSvgResourceTarget(persistedTarget) ? formatShadowConfigToDropShadow(config) : formatShadowConfigToLayer(config);
   });
   layers.push(...addedOuterLayers);
-  element.style.boxShadow = layers.length ? layers.join(", ") : "none";
+  if (isSvgResourceTarget(persistedTarget)) {
+    element.style.boxShadow = "none";
+    element.style.filter = layers.length ? layers.join(" ") : "";
+  } else {
+    element.style.boxShadow = layers.length ? layers.join(", ") : "none";
+  }
   syncAssociatedAdjustTargetsFromSource();
 }
 
@@ -2150,7 +2370,7 @@ function getAdjustValues(target) {
   const styles = window.getComputedStyle(element);
   const rect = element.getBoundingClientRect();
   const isFlex = styles.display === "flex" || styles.display === "inline-flex";
-  const fillInfo = getAdjustFillInfo(styles);
+  const fillInfo = getAdjustFillInfo(styles, element);
   const shadowLayers = getShadowLayers(styles.boxShadow);
 
   return {
@@ -2173,6 +2393,7 @@ function getAdjustValues(target) {
     backgroundVisible: fillInfo.backgroundVisible,
     fillType: fillInfo.fillType,
     fillLabel: fillInfo.fillLabel,
+    svgPaintProp: fillInfo.svgPaintProp || "fill",
     borderRadius: getResolvedBorderRadius(styles, rect),
     opacity: Math.round(Number.parseFloat(styles.opacity || "1") * 100),
     shadowOuterVisible: shadowLayers.outer,
@@ -2470,6 +2691,7 @@ function buildAdjustShadowOperationLogs(target) {
 
 function getAdjustPromptText(target) {
   const values = getAdjustValues(target);
+  const isResourceTarget = isSvgResourceTarget(target);
   const physicalAlignment = getPhysicalAlignment(values);
   const directionLabel =
     values.layoutDirection === "row" ? "横向" : values.layoutDirection === "column" ? "纵向" : "关闭";
@@ -2495,10 +2717,13 @@ function getAdjustPromptText(target) {
   const fillOperations = buildAdjustFillOperationLogs(persistedTarget);
   const shadowOperations = buildAdjustShadowOperationLogs(persistedTarget);
 
-  const lines = [
-    `布局：${directionLabel}，尺寸 ${values.width}px × ${values.height}px，对齐 ${verticalLabel}${horizontalLabel}，间距 ${spacingLabel}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`,
-    `外观：不透明度 ${values.opacity}% ，圆角 ${values.borderRadius}px。`
-  ];
+  const lines = [];
+  if (!isResourceTarget) {
+    lines.push(
+      `布局：${directionLabel}，尺寸 ${values.width}px × ${values.height}px，对齐 ${verticalLabel}${horizontalLabel}，间距 ${spacingLabel}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`
+    );
+  }
+  lines.push(`外观：不透明度 ${values.opacity}% ，圆角 ${values.borderRadius}px。`);
 
   if (fillOperations.length) {
     lines.push(`颜色图层操作：${fillOperations.join("；")}。`);
@@ -2697,7 +2922,8 @@ function renderFillPopoverControls() {
 
   const isShadowSource = state.fillPopoverSource === "shadow";
   const isOverlay = state.fillPopoverOverlayIndex !== null;
-  const mode = isShadowSource || isOverlay ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
+  const isResourceTarget = isSvgResourceTarget(state.adjustTarget);
+  const mode = isShadowSource || isOverlay || isResourceTarget ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
   const solidColor = cloneHsvaColor(
     state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 }
   );
@@ -2712,9 +2938,9 @@ function renderFillPopoverControls() {
   state.fillPopoverGradientActiveStop = activeStopIndex;
   state.fillControls.modeSolid.dataset.state = mode === "solid" ? "active" : "inactive";
   state.fillControls.modeGradient.dataset.state = mode === "gradient" ? "active" : "inactive";
-  state.fillControls.modeGradient.disabled = isOverlay || isShadowSource;
-  state.fillControls.modeGradient.hidden = isShadowSource;
-  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay || isShadowSource ? "true" : "false");
+  state.fillControls.modeGradient.disabled = isOverlay || isShadowSource || isResourceTarget;
+  state.fillControls.modeGradient.hidden = isShadowSource || isResourceTarget;
+  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay || isShadowSource || isResourceTarget ? "true" : "false");
   if (state.fillControls.modeSolid) {
     state.fillControls.modeSolid.hidden = isShadowSource;
   }
@@ -2941,7 +3167,8 @@ function syncFillPopoverFromTarget(target = state.adjustTarget) {
   const activeConfig = getActiveFillConfig(target);
   const solidColor = colorStringToHsva(activeConfig?.css || activeConfig?.hex || DEFAULT_FILL_CSS, fallbackColor) || cloneHsvaColor(fallbackColor);
   const isOverlay = state.fillPopoverOverlayIndex !== null;
-  const nextMode = isOverlay
+  const isResourceTarget = isSvgResourceTarget(persistedTarget);
+  const nextMode = isOverlay || isResourceTarget
     ? "solid"
     : persistedTarget.adjustFillType === "gradient" && persistedTarget.adjustStoredBackgroundImage
       ? "gradient"
@@ -3065,7 +3292,7 @@ function setActiveFillPopoverColor(nextColor, { commit = false, sync = true } = 
 }
 
 function setFillPopoverMode(mode, { commit = false, sync = true } = {}) {
-  if (state.fillPopoverSource === "shadow" || state.fillPopoverOverlayIndex !== null) {
+  if (state.fillPopoverSource === "shadow" || state.fillPopoverOverlayIndex !== null || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -3354,6 +3581,146 @@ function syncShadowPopoverFromTarget(target = state.adjustTarget) {
   }
 }
 
+function syncAdjustResourceMode(target) {
+  if (!state.adjustPopover || !state.adjustControls) {
+    return;
+  }
+
+  const isResourceTarget = isSvgResourceTarget(target);
+  state.adjustPopover.dataset.targetType = isResourceTarget ? "svg-resource" : "element";
+  if (state.adjustControls.title) {
+    state.adjustControls.title.textContent = isResourceTarget ? "调整 SVG" : "调整样式";
+  }
+  if (state.adjustControls.layoutSection) {
+    state.adjustControls.layoutSection.hidden = isResourceTarget;
+  }
+  if (state.adjustControls.layoutDivider) {
+    state.adjustControls.layoutDivider.hidden = isResourceTarget;
+  }
+  if (state.adjustControls.resourceActions) {
+    state.adjustControls.resourceActions.hidden = !isResourceTarget;
+  }
+  const addFillButton = state.adjustPopover.querySelector('[data-action="add-fill"]');
+  if (addFillButton) {
+    const label = isResourceTarget ? "设置 SVG 颜色" : "添加颜色";
+    addFillButton.setAttribute("aria-label", label);
+    addFillButton.setAttribute("title", label);
+  }
+}
+
+function sanitizeResourceFilename(value, fallback = "svg-resource") {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return normalized || fallback;
+}
+
+function copySvgDownloadComputedStyles(sourceRoot, cloneRoot) {
+  const queue = [[sourceRoot, cloneRoot]];
+  let copied = 0;
+  const props = [
+    "color",
+    "fill",
+    "fill-opacity",
+    "stroke",
+    "stroke-opacity",
+    "stroke-width",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "opacity",
+    "filter"
+  ];
+
+  while (queue.length && copied < 600) {
+    const [source, clone] = queue.shift();
+    if (!(source instanceof Element) || !(clone instanceof Element)) {
+      continue;
+    }
+
+    const styles = window.getComputedStyle(source);
+    props.forEach((prop) => {
+      const value = styles.getPropertyValue(prop);
+      if (value) {
+        clone.style.setProperty(prop, value);
+      }
+    });
+
+    const sourceChildren = [...source.children];
+    const cloneChildren = [...clone.children];
+    sourceChildren.forEach((sourceChild, index) => {
+      if (cloneChildren[index] instanceof Element) {
+        queue.push([sourceChild, cloneChildren[index]]);
+      }
+    });
+    copied += 1;
+  }
+}
+
+function serializeSvgResource(svg) {
+  const clone = svg.cloneNode(true);
+  if (!(clone instanceof Element)) {
+    return "";
+  }
+
+  clone.setAttribute("xmlns", SVG_NAMESPACE);
+  if (!clone.getAttribute("xmlns:xlink")) {
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  }
+
+  const rect = svg.getBoundingClientRect();
+  if (!clone.getAttribute("width") && rect.width > 0) {
+    clone.setAttribute("width", String(Math.round(rect.width)));
+  }
+  if (!clone.getAttribute("height") && rect.height > 0) {
+    clone.setAttribute("height", String(Math.round(rect.height)));
+  }
+  if (!clone.getAttribute("viewBox") && rect.width > 0 && rect.height > 0) {
+    clone.setAttribute("viewBox", `0 0 ${Math.round(rect.width)} ${Math.round(rect.height)}`);
+  }
+
+  copySvgDownloadComputedStyles(svg, clone);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}`;
+}
+
+function downloadAdjustResource() {
+  if (!state.adjustTarget) {
+    return;
+  }
+
+  const svg = getSvgResourceRoot(getTargetElement(state.adjustTarget));
+  if (!(svg instanceof Element)) {
+    showToast("当前目标不是可下载资源");
+    return;
+  }
+
+  const source = serializeSvgResource(svg);
+  if (!source) {
+    showToast("下载资源失败");
+    return;
+  }
+
+  const nameSource =
+    svg.getAttribute("aria-label") ||
+    svg.getAttribute("title") ||
+    svg.id ||
+    svg.getAttribute("data-name") ||
+    "svg-resource";
+  const filename = `${sanitizeResourceFilename(nameSource)}.svg`;
+  const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.dataset.chatContextPickerUi = "true";
+  document.documentElement.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("已下载 SVG 资源");
+}
+
 function positionFillPopover(anchorRect) {
   if (!state.fillPopover || !anchorRect) {
     return;
@@ -3567,7 +3934,7 @@ function positionGapMenu(anchorRect) {
 }
 
 function openSizeMenu(prop, anchorRect = null) {
-  if (!state.adjustTarget) {
+  if (!state.adjustTarget || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -3596,7 +3963,7 @@ function closeSizeMenu() {
 }
 
 function openGapMenu(anchorRect = null) {
-  if (!state.adjustTarget) {
+  if (!state.adjustTarget || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -3623,7 +3990,7 @@ function closeGapMenu() {
 }
 
 function applyAdjustGapMode(mode, { commit = false } = {}) {
-  if (!state.adjustTarget) {
+  if (!state.adjustTarget || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -3684,7 +4051,7 @@ function applyAdjustGapMode(mode, { commit = false } = {}) {
 }
 
 function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
-  if (!state.adjustTarget || !prop) {
+  if (!state.adjustTarget || !prop || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -3970,6 +4337,7 @@ function syncAdjustPopoverFromTarget(target) {
 
   const values = getAdjustValues(target);
   const persistedTarget = ensureAdjustLayerState(target, values);
+  syncAdjustResourceMode(persistedTarget);
   renderAdjustLayerRows(persistedTarget);
   const isFillPopoverOpen = state.fillPopover?.dataset.open === "true";
   const isShadowPopoverOpen = state.shadowPopover?.dataset.open === "true";
@@ -4243,7 +4611,7 @@ function closeAdjustPopover() {
 }
 
 function applyAdjustAlignment(horizontal, vertical, { commit = false } = {}) {
-  if (!state.adjustTarget) {
+  if (!state.adjustTarget || isSvgResourceTarget(state.adjustTarget)) {
     return;
   }
 
@@ -4307,6 +4675,10 @@ function applyAdjustAlignment(horizontal, vertical, { commit = false } = {}) {
 
 function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}) {
   if (!state.adjustTarget) {
+    return;
+  }
+
+  if (isSvgResourceTarget(state.adjustTarget) && isAdjustLayoutProp(prop)) {
     return;
   }
 

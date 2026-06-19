@@ -39,6 +39,94 @@ function getTargetNode(target) {
   return target.kind === "text" ? target.node : target.element;
 }
 
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const VISUAL_ASSET_SELECTOR = "svg, img, picture, canvas, video, iframe, object, embed";
+
+function isSvgResourceElement(element) {
+  return Boolean(
+    element instanceof Element &&
+      (element.namespaceURI === SVG_NAMESPACE || element.tagName?.toLowerCase?.() === "svg")
+  );
+}
+
+function getDominantWrappedSvgResource(element) {
+  if (!(element instanceof Element) || typeof element.querySelectorAll !== "function") {
+    return null;
+  }
+
+  const svgs = [...element.querySelectorAll("svg")].filter((svg) => {
+    const rect = svg.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+  if (svgs.length !== 1) {
+    return null;
+  }
+
+  const svg = svgs[0];
+  const rect = element.getBoundingClientRect();
+  const svgRect = svg.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
+  const elementArea = rect.width * rect.height;
+  const svgArea = svgRect.width * svgRect.height;
+  const fillsMostOfTarget = elementArea > 0 && svgArea / elementArea >= 0.65;
+  const matchesTargetSize = Math.abs(svgRect.width - rect.width) <= 6 && Math.abs(svgRect.height - rect.height) <= 6;
+  const contentClone = element.cloneNode(true);
+  contentClone.querySelectorAll?.("svg").forEach((svgNode) => svgNode.remove());
+  const isSvgOnlyWrapper = !String(contentClone.textContent || "").trim();
+
+  return isSvgOnlyWrapper || fillsMostOfTarget || matchesTargetSize ? svg : null;
+}
+
+function getSvgResourceRoot(element) {
+  if (!isSvgResourceElement(element)) {
+    return getDominantWrappedSvgResource(element);
+  }
+
+  if (element.tagName?.toLowerCase?.() === "svg") {
+    return element;
+  }
+
+  return element.closest?.("svg") || null;
+}
+
+function isSvgResourceTarget(target) {
+  if (!target || target.kind !== "element") {
+    return false;
+  }
+
+  return Boolean(getSvgResourceRoot(getTargetElement(target)));
+}
+
+function elementHasCssVisualAsset(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  const descendants =
+    typeof element.querySelectorAll === "function" ? [...element.querySelectorAll("*")].slice(0, 80) : [];
+  const candidates = [element, ...descendants];
+  return candidates.some((candidate) => {
+    const styles = window.getComputedStyle(candidate);
+    return styles.backgroundImage && styles.backgroundImage !== "none";
+  });
+}
+
+function hasVisualAssetContent(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    isSvgResourceElement(element) ||
+      element.matches?.(VISUAL_ASSET_SELECTOR) ||
+      element.querySelector?.(VISUAL_ASSET_SELECTOR) ||
+      elementHasCssVisualAsset(element)
+  );
+}
+
 function getTargetLabel(target) {
   if (target.kind === "text") {
     return `文本 · ${getElementDescriptor(target.parentElement)}`;
@@ -308,17 +396,9 @@ function getHoverLockFloatingMirrorCandidates(targetElement) {
 }
 
 function createHoverLockMirror(targetElement, { append = true } = {}) {
-  const primary = createHoverLockMirrorEntry(targetElement, { append });
-  if (!primary) {
-    return null;
-  }
-
-  return {
-    ...primary,
-    extraMirrors: getHoverLockFloatingMirrorCandidates(targetElement)
-      .map((candidate) => createHoverLockMirrorEntry(candidate, { append }))
-      .filter(Boolean)
-  };
+  void targetElement;
+  void append;
+  return null;
 }
 
 function removeHoverLockMirror(mirror) {
@@ -343,6 +423,12 @@ function prepareHoverLockSnapshot(target) {
   const targetElement = target ? getTargetElement(target) : null;
   if (!(targetElement instanceof Element)) {
     clearHoverLockSnapshot();
+    return;
+  }
+
+  if (hasVisualAssetContent(targetElement)) {
+    clearHoverLockSnapshot();
+    target.adjustPreserveMirror = null;
     return;
   }
 
@@ -410,10 +496,32 @@ function endHoverLock() {
   state.hoverLock = null;
 }
 
+function cleanupHoverLockArtifacts() {
+  endHoverLock();
+  clearHoverLockSnapshot();
+  [state.adjustTarget, state.hoveredTarget, state.hoveredSelectedTarget, ...state.selectedTargets].forEach((target) => {
+    if (target) {
+      target.adjustPreserveMirror = null;
+    }
+  });
+  document.querySelectorAll('[data-chat-context-picker-ui="true"]').forEach((element) => {
+    if (element instanceof HTMLElement && element.style.zIndex === "2147483645") {
+      element.remove();
+    }
+  });
+}
+
 function beginHoverLockForTarget(target, source = "adjust") {
   const targetElement = target ? getTargetElement(target) : null;
   if (!(targetElement instanceof Element)) {
     endHoverLock();
+    return;
+  }
+
+  if (hasVisualAssetContent(targetElement)) {
+    endHoverLock();
+    clearHoverLockSnapshot();
+    target.adjustPreserveMirror = null;
     return;
   }
 

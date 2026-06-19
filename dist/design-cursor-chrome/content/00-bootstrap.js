@@ -1,5 +1,6 @@
 // Bootstrap shared state plus the icon and mode registries used across the picker.
 window.__chatContextPickerLoaded = true;
+window.__chatContextPickerVersion = "2.0.2-no-hover-mirror";
 
 const state = {
   active: false,
@@ -124,6 +125,13 @@ const ICONS = {
     <svg class="lucide lucide-copy" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  `,
+  download: `
+    <svg class="lucide lucide-download" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 15V3" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M20 17v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" />
     </svg>
   `,
   pipette: `

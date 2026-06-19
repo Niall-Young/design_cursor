@@ -752,6 +752,7 @@ function handleViewportChange() {
 }
 
 function activatePicker() {
+  cleanupHoverLockArtifacts();
   ensureToolbar();
   ensureOverlayLayer();
   ensurePromptPopover();
