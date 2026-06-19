@@ -429,7 +429,7 @@ function ensureAdjustPopover() {
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("borderRadius")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="borderRadius" />
+          <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" max="999" step="1" data-chat-context-picker-numeric="true" data-adjust-input="borderRadius" />
         </label>
       </div>
     </div>

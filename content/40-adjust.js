@@ -67,6 +67,7 @@ const DEFAULT_BASE_FILL_ALPHA = 1;
 const DEFAULT_BASE_FILL_CSS = buildAdjustColorCss(DEFAULT_BASE_FILL_HEX, DEFAULT_BASE_FILL_ALPHA);
 const DEFAULT_FILL_OVERLAY_LAYER = `linear-gradient(${DEFAULT_FILL_CSS}, ${DEFAULT_FILL_CSS})`;
 const DEFAULT_SHADOW_ALPHA = 0.2;
+const ADJUST_MAX_BORDER_RADIUS = 999;
 
 function getAdjustTargetElement(target) {
   const element = getTargetElement(target);
@@ -128,6 +129,10 @@ function clampNumber(value, min, max, fallback = min) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeAdjustBorderRadius(value, fallback = 0) {
+  return Math.round(clampNumber(value, 0, ADJUST_MAX_BORDER_RADIUS, fallback));
 }
 
 function normalizeHexColor(value) {
@@ -1873,12 +1878,12 @@ function formatAdjustColorValue(value) {
 
 function getResolvedBorderRadius(styles, rect) {
   const basis = Math.min(rect.width || 0, rect.height || 0);
-  return Math.max(
+  return normalizeAdjustBorderRadius(Math.max(
     parseLengthValue(styles.borderTopLeftRadius, basis, 0),
     parseLengthValue(styles.borderTopRightRadius, basis, 0),
     parseLengthValue(styles.borderBottomRightRadius, basis, 0),
     parseLengthValue(styles.borderBottomLeftRadius, basis, 0)
-  );
+  ));
 }
 
 function getSvgPaintColor(value, styles) {
@@ -4427,7 +4432,7 @@ function syncAdjustPopoverFromTarget(target) {
     }
   }
   if (state.adjustControls.borderRadius) {
-    state.adjustControls.borderRadius.value = String(values.borderRadius);
+    state.adjustControls.borderRadius.value = String(normalizeAdjustBorderRadius(values.borderRadius));
   }
   if (state.adjustControls.opacity) {
     state.adjustControls.opacity.value = String(values.opacity);
@@ -4776,7 +4781,7 @@ function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}
   }
 
   if (prop === "borderRadius") {
-    element.style.borderRadius = `${clampNumber(rawValue, 0, 999, 0)}px`;
+    element.style.borderRadius = `${normalizeAdjustBorderRadius(rawValue)}px`;
   }
 
   if (prop === "opacity") {
