@@ -334,6 +334,12 @@ function ensureAdjustPopover() {
         <span class="chat-context-picker-adjust-close-icon">${icon("close")}</span>
       </button>
     </div>
+    <div class="chat-context-picker-association-row">
+      <span class="chat-context-picker-association-label">关联模式</span>
+      <button class="chat-context-picker-association-switch" type="button" role="switch" aria-checked="false" data-action="toggle-association-mode" aria-label="关联模式" title="关联模式">
+        <span class="chat-context-picker-association-switch-thumb"></span>
+      </button>
+    </div>
     <div class="chat-context-picker-adjust-divider"></div>
     <div class="chat-context-picker-adjust-body">
     <div class="chat-context-picker-adjust-section">
@@ -538,6 +544,11 @@ function ensureAdjustPopover() {
 
     if (action === "close-adjust") {
       closeAdjustPopover();
+      return;
+    }
+
+    if (action === "toggle-association-mode") {
+      toggleAssociationMode();
       return;
     }
 
@@ -921,6 +932,7 @@ function ensureAdjustPopover() {
   state.adjustPopover = popover;
   state.adjustControls = {
     body: popover.querySelector(".chat-context-picker-adjust-body"),
+    associationModeToggle: popover.querySelector('[data-action="toggle-association-mode"]'),
     fillStack: popover.querySelector('[data-adjust-stack="fill"]'),
     backgroundColorInput: popover.querySelector('[data-adjust-input="backgroundColor"]'),
     backgroundColorText: popover.querySelector('[data-adjust-text="backgroundColor"]'),
@@ -943,6 +955,8 @@ function ensureAdjustPopover() {
     outerShadowRow: popover.querySelector('[data-adjust-row="shadow-outer"]'),
     innerShadowRow: popover.querySelector('[data-adjust-row="shadow-inner"]')
   };
+  state.associationModeToggle = state.adjustControls.associationModeToggle;
+  syncAssociationModeControl();
   renderAdjustLayerRows(state.adjustTarget);
 }
 

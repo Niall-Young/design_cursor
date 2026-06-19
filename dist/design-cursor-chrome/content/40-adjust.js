@@ -1176,6 +1176,7 @@ function refreshAdjustPopoverControlRefs() {
   state.adjustControls = {
     ...state.adjustControls,
     body: state.adjustPopover.querySelector(".chat-context-picker-adjust-body"),
+    associationModeToggle: state.adjustPopover.querySelector('[data-action="toggle-association-mode"]'),
     fillStack: state.adjustPopover.querySelector('[data-adjust-stack="fill"]'),
     shadowStack: state.adjustPopover.querySelector('[data-adjust-stack="shadow"]'),
     backgroundColorInput: state.adjustPopover.querySelector('[data-adjust-input="backgroundColor"]'),
@@ -1188,6 +1189,8 @@ function refreshAdjustPopoverControlRefs() {
     outerShadowRow: state.adjustPopover.querySelector('[data-adjust-row="shadow-outer"]'),
     innerShadowRow: state.adjustPopover.querySelector('[data-adjust-row="shadow-inner"]')
   };
+  state.associationModeToggle = state.adjustControls.associationModeToggle;
+  syncAssociationModeControl();
 }
 
 function getAdjustLayerSelectableRows(kind = null) {
@@ -1511,6 +1514,7 @@ function pasteAdjustLayerSelection() {
 
     applyFillLayerState(persistedTarget);
     refreshAdjustPromptText(persistedTarget);
+    syncAssociatedAdjustTargetsFromSource();
     syncAdjustPopoverFromTarget(persistedTarget);
     renderSelectionAndHighlights();
     commitAdjustChanges();
@@ -1539,6 +1543,7 @@ function pasteAdjustLayerSelection() {
     persistedTarget.adjustShadowActiveLayer = layers[0]?.type || persistedTarget.adjustShadowActiveLayer || "outer";
     applyShadowLayerState(persistedTarget);
     refreshAdjustPromptText(persistedTarget);
+    syncAssociatedAdjustTargetsFromSource();
     syncAdjustPopoverFromTarget(persistedTarget);
     renderSelectionAndHighlights();
     commitAdjustChanges();
@@ -1629,12 +1634,16 @@ function applyAdjustableStyleSnapshot(element, snapshot) {
   }
 
   if (Array.isArray(snapshot.children)) {
-    snapshot.children.forEach((entry) => {
-      if (!(entry?.element instanceof Element) || !entry.styles) {
+    snapshot.children.forEach((entry, index) => {
+      const child =
+        entry?.element instanceof Element && entry.element.parentElement === element
+          ? entry.element
+          : element.children[index];
+      if (!(child instanceof Element) || !entry.styles) {
         return;
       }
       ADJUSTABLE_CHILD_MARGIN_PROPS.forEach((prop) => {
-        entry.element.style[prop] = entry.styles[prop] || "";
+        child.style[prop] = entry.styles[prop] || "";
       });
     });
   }
@@ -1661,6 +1670,137 @@ function areStyleSnapshotsEqual(a, b) {
     }
     return ADJUSTABLE_CHILD_MARGIN_PROPS.every((prop) => (entry.styles?.[prop] || "") === (other.styles?.[prop] || ""));
   });
+}
+
+function getCurrentAdjustStyleElements(primaryElement = null) {
+  const sourceTarget = state.adjustTarget;
+  const sourceElement =
+    primaryElement instanceof Element
+      ? primaryElement
+      : sourceTarget
+        ? getAdjustTargetElement(sourceTarget)
+        : null;
+
+  const elements = [];
+  const addElement = (element) => {
+    if (element instanceof Element && !elements.includes(element)) {
+      elements.push(element);
+    }
+  };
+
+  addElement(sourceElement);
+
+  if (!state.associationMode || !isElementTarget(sourceTarget)) {
+    return elements;
+  }
+
+  const realSourceElement = getTargetElement(sourceTarget);
+  state.selectedTargets
+    .filter(isElementTarget)
+    .forEach((target) => {
+      const element = getTargetElement(target);
+      if (element === realSourceElement || !areAssociatedElements(realSourceElement, element)) {
+        return;
+      }
+      addElement(element);
+    });
+
+  return elements;
+}
+
+function captureAdjustableStyleGroupSnapshot(elements) {
+  return {
+    items: mergeTargetsByIdentity(
+      (elements || [])
+        .filter((element) => element instanceof Element)
+        .map((element) => createElementTarget(element))
+    ).map((target) => {
+      const element = getTargetElement(target);
+      return {
+        element,
+        snapshot: captureAdjustableStyleSnapshot(element)
+      };
+    })
+  };
+}
+
+function normalizeAdjustableStyleGroupSnapshot(snapshot, fallbackElement = null) {
+  if (snapshot?.items && Array.isArray(snapshot.items)) {
+    return {
+      items: snapshot.items.filter((item) => item?.element instanceof Element && item.snapshot)
+    };
+  }
+
+  if (snapshot && fallbackElement instanceof Element) {
+    return {
+      items: [{
+        element: fallbackElement,
+        snapshot
+      }]
+    };
+  }
+
+  return { items: [] };
+}
+
+function areStyleGroupSnapshotsEqual(a, b) {
+  const left = normalizeAdjustableStyleGroupSnapshot(a);
+  const right = normalizeAdjustableStyleGroupSnapshot(b);
+  if (left.items.length !== right.items.length) {
+    return false;
+  }
+
+  return left.items.every((entry, index) => {
+    const other = right.items[index];
+    return (
+      other?.element === entry.element &&
+      areStyleSnapshotsEqual(entry.snapshot, other.snapshot)
+    );
+  });
+}
+
+function captureCurrentAdjustStyleBaseline(primaryElement = null) {
+  return captureAdjustableStyleGroupSnapshot(getCurrentAdjustStyleElements(primaryElement));
+}
+
+function syncAssociatedAdjustTargetsFromSource() {
+  if (!state.associationMode || !isElementTarget(state.adjustTarget)) {
+    return;
+  }
+
+  const sourceTarget = state.adjustTarget;
+  const sourceElement = getAdjustTargetElement(sourceTarget);
+  const realSourceElement = getTargetElement(sourceTarget);
+  if (!(sourceElement instanceof Element) || !(realSourceElement instanceof Element)) {
+    return;
+  }
+
+  const sourceSnapshot = captureAdjustableStyleSnapshot(sourceElement);
+  const promptText = sourceTarget.adjustPromptText || "";
+  state.selectedTargets
+    .filter(isElementTarget)
+    .forEach((target) => {
+      const element = getTargetElement(target);
+      if (element === realSourceElement || !areAssociatedElements(realSourceElement, element)) {
+        return;
+      }
+
+      applyAdjustableStyleSnapshot(element, sourceSnapshot);
+      target.adjustPromptText = promptText;
+      target.adjustPreserveSelection = true;
+      const rect = mergeRects(getTargetClientRects(target));
+      if (rect) {
+        target.adjustPreserveRect = rect;
+        target.adjustPreservePageRect = {
+          left: rect.left + window.scrollX,
+          top: rect.top + window.scrollY,
+          right: rect.right + window.scrollX,
+          bottom: rect.bottom + window.scrollY,
+          width: rect.width,
+          height: rect.height
+        };
+      }
+    });
 }
 
 function normalizeFlexChildMargins(element) {
@@ -1865,6 +2005,7 @@ function applyFillLayerState(target) {
   if (!persistedTarget.adjustFillEnabled || !persistedTarget.adjustFillVisible) {
     element.style.backgroundColor = "transparent";
     element.style.backgroundImage = "none";
+    syncAssociatedAdjustTargetsFromSource();
     return;
   }
 
@@ -1882,6 +2023,7 @@ function applyFillLayerState(target) {
     if (persistedTarget.adjustStoredBackgroundColor) {
       element.style.backgroundColor = persistedTarget.adjustStoredBackgroundColor;
     }
+    syncAssociatedAdjustTargetsFromSource();
     return;
   }
 
@@ -1890,9 +2032,10 @@ function applyFillLayerState(target) {
     .map((layer) => {
       const color = layer?.colorCss || DEFAULT_FILL_CSS;
       return `linear-gradient(${color}, ${color})`;
-    });
+  });
   element.style.backgroundImage = overlayLayers.length ? overlayLayers.join(", ") : "none";
   element.style.backgroundColor = persistedTarget.adjustStoredBackgroundColor || DEFAULT_FILL_CSS;
+  syncAssociatedAdjustTargetsFromSource();
 }
 
 function applyShadowLayerState(target) {
@@ -1916,9 +2059,10 @@ function applyShadowLayerState(target) {
         ...(layer?.config || getDefaultShadowConfig(shadowType)),
         type: shadowType
       });
-    });
+  });
   layers.push(...addedOuterLayers);
   element.style.boxShadow = layers.length ? layers.join(", ") : "none";
+  syncAssociatedAdjustTargetsFromSource();
 }
 
 function getParentFlexContext(element) {
@@ -2423,6 +2567,7 @@ function toggleBackgroundVisibility() {
   persistedTarget.adjustFillVisible = !persistedTarget.adjustFillVisible;
   applyFillLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   syncAdjustPopoverFromTarget(persistedTarget);
   renderSelectionAndHighlights();
   commitAdjustChanges();
@@ -2444,6 +2589,7 @@ function clearBackgroundFill() {
   closeFillPopover();
   applyFillLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   syncAdjustPopoverFromTarget(persistedTarget);
   renderSelectionAndHighlights();
   commitAdjustChanges();
@@ -2465,6 +2611,7 @@ function toggleShadowType(shadowType) {
   persistedTarget.adjustShadowActiveLayer = shadowType;
   applyShadowLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   syncAdjustPopoverFromTarget(persistedTarget);
   renderSelectionAndHighlights();
   commitAdjustChanges();
@@ -2878,6 +3025,7 @@ function applyFillPopoverState({ commit = false, sync = true } = {}) {
 
   applyFillLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   if (sync) {
     syncFillPopoverFromTarget(persistedTarget);
     syncAdjustPopoverFromTarget(persistedTarget);
@@ -3153,6 +3301,7 @@ function updateAdjustFillColorValue({ overlayIndex = null, hex = null, alpha = n
 
   applyFillLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   if (sync) {
     syncAdjustPopoverFromTarget(persistedTarget);
   }
@@ -3488,7 +3637,7 @@ function applyAdjustGapMode(mode, { commit = false } = {}) {
   const persistedTarget = ensureAdjustLayerState(state.adjustTarget, currentValues);
 
   if (!state.adjustStyleBaseline) {
-    state.adjustStyleBaseline = captureAdjustableStyleSnapshot(element);
+    state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
   }
 
   if (!/flex/.test(window.getComputedStyle(element).display)) {
@@ -3525,6 +3674,7 @@ function applyAdjustGapMode(mode, { commit = false } = {}) {
   }
 
   refreshAdjustPromptText(state.adjustTarget);
+  syncAssociatedAdjustTargetsFromSource();
   syncAdjustPopoverFromTarget(state.adjustTarget);
   renderSelectionAndHighlights();
 
@@ -3553,7 +3703,7 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
   const sizeValue = `${Math.max(0, Math.round(normalizedProp === "width" ? rect.width : rect.height))}px`;
 
   if (!state.adjustStyleBaseline) {
-    state.adjustStyleBaseline = captureAdjustableStyleSnapshot(element);
+    state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
   }
 
   if (normalizedProp === "width") {
@@ -3622,6 +3772,7 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
   }
 
   refreshAdjustPromptText(state.adjustTarget);
+  syncAssociatedAdjustTargetsFromSource();
   if (sync) {
     syncSizeMenuFromTarget(state.adjustTarget);
     syncAdjustPopoverFromTarget(state.adjustTarget);
@@ -3725,6 +3876,7 @@ function setShadowPopoverType(
     persistedTarget.adjustShadowActiveLayer = state.shadowPopoverType;
     applyShadowLayerState(persistedTarget);
     refreshAdjustPromptText(persistedTarget);
+    syncAssociatedAdjustTargetsFromSource();
     renderSelectionAndHighlights();
     if (syncAdjust) {
       syncAdjustPopoverFromTarget(persistedTarget);
@@ -3799,6 +3951,7 @@ function applyShadowPopoverInput(prop, rawValue, { commit = false, sync = true }
   }
   applyShadowLayerState(persistedTarget);
   refreshAdjustPromptText(persistedTarget);
+  syncAssociatedAdjustTargetsFromSource();
   if (sync) {
     syncShadowPopoverFromTarget(persistedTarget);
     syncAdjustPopoverFromTarget(persistedTarget);
@@ -4019,15 +4172,17 @@ function commitAdjustChanges() {
   }
 
   const element = getAdjustTargetElement(state.adjustTarget);
-  const currentSnapshot = captureAdjustableStyleSnapshot(element);
-  if (!state.adjustStyleBaseline || areStyleSnapshotsEqual(state.adjustStyleBaseline, currentSnapshot)) {
+  syncAssociatedAdjustTargetsFromSource();
+  const currentSnapshot = captureCurrentAdjustStyleBaseline(element);
+  if (!state.adjustStyleBaseline || areStyleGroupSnapshotsEqual(state.adjustStyleBaseline, currentSnapshot)) {
     return;
   }
 
   pushHistoryEntry({
     type: "style-inline",
     element,
-    snapshot: state.adjustStyleBaseline
+    snapshot: state.adjustStyleBaseline,
+    items: normalizeAdjustableStyleGroupSnapshot(state.adjustStyleBaseline, element).items
   });
   state.adjustStyleBaseline = currentSnapshot;
 }
@@ -4054,7 +4209,7 @@ function openAdjustPopover(target, anchorRect = null) {
   setAdjustPromptBaselines(persistedTarget);
   state.adjustTarget = persistedTarget;
   beginHoverLockForAdjustTarget(persistedTarget);
-  state.adjustStyleBaseline = captureAdjustableStyleSnapshot(getAdjustTargetElement(persistedTarget));
+  state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(getAdjustTargetElement(persistedTarget));
   clearAdjustLayerSelection();
   syncAdjustPopoverFromTarget(persistedTarget);
   positionAdjustPopover(persistedTarget, anchorRect);
@@ -4100,7 +4255,7 @@ function applyAdjustAlignment(horizontal, vertical, { commit = false } = {}) {
   const persistedTarget = ensureAdjustLayerState(state.adjustTarget, currentValues);
 
   if (!state.adjustStyleBaseline) {
-    state.adjustStyleBaseline = captureAdjustableStyleSnapshot(element);
+    state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
   }
 
   if (!/flex/.test(window.getComputedStyle(element).display)) {
@@ -4141,6 +4296,7 @@ function applyAdjustAlignment(horizontal, vertical, { commit = false } = {}) {
   }
 
   refreshAdjustPromptText(state.adjustTarget);
+  syncAssociatedAdjustTargetsFromSource();
   syncAdjustPopoverFromTarget(state.adjustTarget);
   renderSelectionAndHighlights();
 
@@ -4160,7 +4316,7 @@ function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}
   }
 
   if (!state.adjustStyleBaseline) {
-    state.adjustStyleBaseline = captureAdjustableStyleSnapshot(element);
+    state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
   }
 
   if (prop === "layoutDirection") {
@@ -4270,6 +4426,7 @@ function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}
   }
 
   refreshAdjustPromptText(state.adjustTarget);
+  syncAssociatedAdjustTargetsFromSource();
   if (sync) {
     syncAdjustPopoverFromTarget(state.adjustTarget);
   }

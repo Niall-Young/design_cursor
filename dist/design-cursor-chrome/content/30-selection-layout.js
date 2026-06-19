@@ -15,6 +15,315 @@ function findSelectedTarget(target) {
   return state.selectedTargets.find((item) => isSameTarget(item, target)) || null;
 }
 
+function syncAssociationModeControl() {
+  const toggle =
+    state.associationModeToggle ||
+    state.adjustControls?.associationModeToggle ||
+    state.adjustPopover?.querySelector?.('[data-action="toggle-association-mode"]');
+  if (!toggle) {
+    return;
+  }
+
+  state.associationModeToggle = toggle;
+  toggle.dataset.state = state.associationMode ? "active" : "default";
+  toggle.setAttribute("aria-checked", state.associationMode ? "true" : "false");
+}
+
+function getAssociationClassSignature(element) {
+  if (!(element instanceof Element)) {
+    return "";
+  }
+
+  return [...element.classList]
+    .filter((className) => !className.startsWith("chat-context-picker-"))
+    .sort()
+    .join(".");
+}
+
+function getAssociationChildSignature(element) {
+  if (!(element instanceof Element)) {
+    return "";
+  }
+
+  return [...element.children]
+    .filter((child) => child instanceof Element && isSelectableElement(child) && hasVisibleBox(child))
+    .slice(0, 8)
+    .map((child) => {
+      const tag = child.tagName.toLowerCase();
+      const classes = getAssociationClassSignature(child);
+      const visibleChildren = [...child.children].filter(
+        (grandchild) => grandchild instanceof Element && hasVisibleBox(grandchild)
+      ).length;
+      return `${tag}:${classes}:${visibleChildren}`;
+    })
+    .join("|");
+}
+
+function getAssociationProfile(element) {
+  const styles = window.getComputedStyle(element);
+  return {
+    tag: element.tagName.toLowerCase(),
+    classes: getAssociationClassSignature(element),
+    childSignature: getAssociationChildSignature(element),
+    role: element.getAttribute("role") || "",
+    ariaLabel: element.getAttribute("aria-label") ? "labeled" : "",
+    display: styles.display,
+    flexDirection: styles.flexDirection || "",
+    gridTemplateColumns: styles.gridTemplateColumns || "",
+    position: styles.position || "",
+    rect: element.getBoundingClientRect()
+  };
+}
+
+function areAssociationNumbersClose(a, b, ratio = 0.22, pixels = 12) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) {
+    return false;
+  }
+
+  const diff = Math.abs(a - b);
+  return diff <= pixels || diff <= Math.max(a, b, 1) * ratio;
+}
+
+function areAssociationBoxesCompatible(sourceProfile, candidateProfile) {
+  const sourceRect = sourceProfile.rect;
+  const candidateRect = candidateProfile.rect;
+  if (
+    sourceRect.width <= 0 ||
+    sourceRect.height <= 0 ||
+    candidateRect.width <= 0 ||
+    candidateRect.height <= 0
+  ) {
+    return false;
+  }
+
+  return (
+    areAssociationNumbersClose(sourceRect.width, candidateRect.width) &&
+    areAssociationNumbersClose(sourceRect.height, candidateRect.height)
+  );
+}
+
+function areAssociatedElements(sourceElement, candidateElement) {
+  if (
+    !(sourceElement instanceof Element) ||
+    !(candidateElement instanceof Element) ||
+    sourceElement === candidateElement ||
+    sourceElement.parentElement !== candidateElement.parentElement ||
+    sourceElement.contains(candidateElement) ||
+    candidateElement.contains(sourceElement) ||
+    !isSelectableElement(candidateElement) ||
+    !hasVisibleBox(candidateElement)
+  ) {
+    return false;
+  }
+
+  const sourceProfile = getAssociationProfile(sourceElement);
+  const candidateProfile = getAssociationProfile(candidateElement);
+  if (sourceProfile.tag !== candidateProfile.tag) {
+    return false;
+  }
+
+  const classMatch =
+    Boolean(sourceProfile.classes || candidateProfile.classes) &&
+    sourceProfile.classes === candidateProfile.classes;
+  const noClassMatch = !sourceProfile.classes && !candidateProfile.classes;
+  const childSignatureMatch =
+    Boolean(sourceProfile.childSignature || candidateProfile.childSignature) &&
+    sourceProfile.childSignature === candidateProfile.childSignature;
+  const roleMatch =
+    sourceProfile.role === candidateProfile.role &&
+    sourceProfile.ariaLabel === candidateProfile.ariaLabel;
+  const layoutMatch =
+    sourceProfile.display === candidateProfile.display &&
+    sourceProfile.flexDirection === candidateProfile.flexDirection &&
+    sourceProfile.gridTemplateColumns === candidateProfile.gridTemplateColumns;
+  const boxMatch = areAssociationBoxesCompatible(sourceProfile, candidateProfile);
+
+  let score = 0;
+  if (classMatch) score += 3;
+  if (noClassMatch) score += 1;
+  if (childSignatureMatch) score += 2;
+  if (roleMatch) score += 1;
+  if (layoutMatch) score += 1;
+  if (boxMatch) score += 2;
+
+  return score >= 5 || (classMatch && boxMatch) || (childSignatureMatch && layoutMatch && boxMatch);
+}
+
+function getDirectAssociatedElementTargetsForElement(sourceElement) {
+  const parent = sourceElement?.parentElement;
+  if (!(sourceElement instanceof Element) || !(parent instanceof Element)) {
+    return [];
+  }
+
+  return [...parent.children]
+    .filter((candidate) => candidate === sourceElement || areAssociatedElements(sourceElement, candidate))
+    .map((element) => createElementTarget(element));
+}
+
+function findAssociationSourceElement(element) {
+  if (!(element instanceof Element)) {
+    return null;
+  }
+
+  let current = element;
+  let fallback = element;
+  let depth = 0;
+
+  while (current instanceof Element && isSelectableElement(current) && depth < 5) {
+    const directTargets = getDirectAssociatedElementTargetsForElement(current);
+    if (directTargets.length > 1) {
+      return current;
+    }
+
+    fallback = current;
+    current = getSelectableParent(current);
+    depth += 1;
+  }
+
+  return fallback;
+}
+
+function getAssociationPrimaryTarget(target) {
+  if (!isElementTarget(target)) {
+    return target;
+  }
+
+  const sourceElement = findAssociationSourceElement(getTargetElement(target));
+  return sourceElement instanceof Element ? createElementTarget(sourceElement) : target;
+}
+
+function getAssociatedElementTargets(target) {
+  if (!isElementTarget(target)) {
+    return target ? [target] : [];
+  }
+
+  const primaryTarget = getAssociationPrimaryTarget(target);
+  const sourceElement = getTargetElement(primaryTarget);
+  const directTargets = getDirectAssociatedElementTargetsForElement(sourceElement);
+  return directTargets.length ? directTargets : [primaryTarget];
+}
+
+function mergeTargetsByIdentity(targets) {
+  const merged = [];
+  targets.forEach((target) => {
+    if (!target || merged.some((item) => isSameTarget(item, target))) {
+      return;
+    }
+    merged.push(target);
+  });
+  return merged;
+}
+
+function addTargetSelectionBatch(targets, preferredTarget = targets?.[0] || null, options = {}) {
+  pruneSelectedTargets();
+  const normalizedTargets = mergeTargetsByIdentity(targets || []).filter(isLiveTarget);
+  const replaceTargets = mergeTargetsByIdentity(options.replaceTargets || []).filter(Boolean);
+  if (!normalizedTargets.length && !replaceTargets.length) {
+    return preferredTarget;
+  }
+
+  const previous = snapshotSelection();
+  if (replaceTargets.length) {
+    state.selectedTargets = state.selectedTargets.filter(
+      (item) => !replaceTargets.some((target) => isSameTarget(item, target))
+    );
+  }
+  normalizedTargets.forEach((target) => {
+    if (hasSelectedTarget(target)) {
+      return;
+    }
+    state.selectedTargets.push(target);
+    if (isElementTarget(target)) {
+      const parent = getSelectableParent(target.element);
+      if (parent) {
+        rememberSelectableChild(parent, target.element);
+      }
+    }
+  });
+
+  const persistedTarget = findSelectedTarget(preferredTarget) || findSelectedTarget(normalizedTargets[0]) || normalizedTargets[0];
+  if (!areSelectionsEqual(previous, state.selectedTargets)) {
+    pushSelectionHistory(previous);
+  }
+  renderSelection();
+  refreshHighlights();
+  return persistedTarget;
+}
+
+function addAssociatedTargetSelection(target) {
+  if (!state.associationMode || !isElementTarget(target)) {
+    return addTargetSelection(target);
+  }
+
+  const primaryTarget = getAssociationPrimaryTarget(target);
+  const associatedTargets = getAssociatedElementTargets(primaryTarget);
+  const persistedTarget = addTargetSelectionBatch(
+    associatedTargets,
+    primaryTarget,
+    { replaceTargets: isSameTarget(primaryTarget, target) ? [] : [target] }
+  );
+  return persistedTarget;
+}
+
+function expandAssociationForAdjustTarget() {
+  if (!state.associationMode || !isElementTarget(state.adjustTarget)) {
+    return 0;
+  }
+
+  const previousTarget = state.adjustTarget;
+  const primaryTarget = getAssociationPrimaryTarget(previousTarget);
+  const associatedTargets = getAssociatedElementTargets(primaryTarget);
+  const persistedTarget = addTargetSelectionBatch(
+    associatedTargets,
+    primaryTarget,
+    { replaceTargets: isSameTarget(primaryTarget, previousTarget) ? [] : [previousTarget] }
+  );
+  if (persistedTarget) {
+    state.adjustTarget = persistedTarget;
+  }
+  return associatedTargets.length;
+}
+
+function setAssociationMode(enabled) {
+  const nextMode = Boolean(enabled);
+  if (state.associationMode === nextMode) {
+    syncAssociationModeControl();
+    return;
+  }
+
+  if (state.adjustTarget) {
+    commitAdjustChanges();
+  }
+
+  state.associationMode = nextMode;
+  syncAssociationModeControl();
+
+  if (!state.adjustTarget) {
+    showToast(nextMode ? "关联模式已开启" : "关联模式已关闭");
+    return;
+  }
+
+  let associatedCount = 0;
+  if (nextMode) {
+    associatedCount = expandAssociationForAdjustTarget();
+  }
+
+  state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(getAdjustTargetElement(state.adjustTarget));
+  syncAdjustPopoverFromTarget(state.adjustTarget);
+  renderSelection();
+  refreshHighlights();
+
+  if (nextMode && associatedCount > 1) {
+    showToast(`关联模式已开启，已关联 ${associatedCount} 个同类元素`);
+  } else {
+    showToast(nextMode ? "关联模式已开启" : "关联模式已关闭");
+  }
+}
+
+function toggleAssociationMode() {
+  setAssociationMode(!state.associationMode);
+}
+
 function findSelectedLayoutTargetForNode(node) {
   const element = resolveElementTarget(node);
   if (!(element instanceof Element)) {

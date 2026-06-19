@@ -210,13 +210,20 @@ function toggleSelectionWithDirectEditor(target, mode) {
     return;
   }
 
-  const persistedTarget = addTargetSelection(target);
+  const associatedCount =
+    mode === "adjust" && state.associationMode && isElementTarget(target)
+      ? getAssociatedElementTargets(target).length
+      : 0;
+  const persistedTarget =
+    associatedCount > 1
+      ? addAssociatedTargetSelection(target)
+      : addTargetSelection(target);
   state.hoveredTarget = null;
   state.hoveredSelectedTarget = persistedTarget;
 
   if (mode === "adjust") {
     openAdjustPopover(persistedTarget);
-    showToast("已打开调整面板");
+    showToast(associatedCount > 1 ? `已打开调整面板，已关联 ${associatedCount} 个同类元素` : "已打开调整面板");
     return;
   }
 

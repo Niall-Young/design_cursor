@@ -1086,6 +1086,16 @@ function captureHistoryInverseEntry(entry) {
   }
 
   if (entry.type === "style-inline") {
+    if (Array.isArray(entry.items) && entry.items.length) {
+      return {
+        type: "style-inline",
+        items: entry.items.map(({ element }) => ({
+          element,
+          snapshot: captureAdjustableStyleSnapshot(element)
+        }))
+      };
+    }
+
     return {
       type: "style-inline",
       element: entry.element,
@@ -1162,6 +1172,24 @@ function restoreHistoryEntry(entry) {
   }
 
   if (entry.type === "style-inline") {
+    if (Array.isArray(entry.items) && entry.items.length) {
+      entry.items.forEach((item) => {
+        applyAdjustableStyleSnapshot(item.element, item.snapshot);
+        const restoredTarget = state.selectedTargets.find(
+          (target) => isElementTarget(target) && getTargetElement(target) === item.element
+        );
+        if (restoredTarget) {
+          refreshAdjustPromptText(restoredTarget);
+        }
+      });
+      if (state.adjustTarget) {
+        syncAdjustPopoverFromTarget(state.adjustTarget);
+      }
+      renderSelection();
+      refreshHighlights();
+      return true;
+    }
+
     applyAdjustableStyleSnapshot(entry.element, entry.snapshot);
     const restoredTarget = state.selectedTargets.find(
       (target) => isElementTarget(target) && getTargetElement(target) === entry.element
@@ -1230,7 +1258,14 @@ function isHistoryEntryRelatedToTargets(entry, targets) {
     return false;
   }
 
-  if (entry.type === "style-inline" || entry.type === "dom-move" || entry.type === "dom-remove" || entry.type === "dom-restore") {
+  if (entry.type === "style-inline") {
+    if (Array.isArray(entry.items) && entry.items.length) {
+      return entry.items.some((item) => selectedElements.includes(item.element));
+    }
+    return selectedElements.includes(entry.element);
+  }
+
+  if (entry.type === "dom-move" || entry.type === "dom-remove" || entry.type === "dom-restore") {
     return selectedElements.includes(entry.element);
   }
 
