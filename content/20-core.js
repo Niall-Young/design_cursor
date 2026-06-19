@@ -97,7 +97,7 @@ function isSvgResourceTarget(target) {
     return false;
   }
 
-  return Boolean(getSvgResourceRoot(getTargetElement(target)));
+  return isSvgResourceElement(getTargetElement(target));
 }
 
 function elementHasCssVisualAsset(element) {

@@ -1686,7 +1686,7 @@ function applyAdjustableStyleSnapshot(element, snapshot) {
     });
   }
 
-  applySvgStyleSnapshot(snapshot.svgPaint);
+  applySvgStyleSnapshot(snapshot.svgPaint, element);
 }
 
 function areStyleSnapshotsEqual(a, b) {
@@ -1743,7 +1743,7 @@ function getCurrentAdjustStyleElements(primaryElement = null) {
     .filter(isElementTarget)
     .forEach((target) => {
       const element = getTargetElement(target);
-      if (element === realSourceElement || !areAssociatedElements(realSourceElement, element)) {
+      if (element === realSourceElement || !isAssociatedElementTargetForSource(sourceTarget, target)) {
         return;
       }
       addElement(element);
@@ -1825,7 +1825,7 @@ function syncAssociatedAdjustTargetsFromSource() {
     .filter(isElementTarget)
     .forEach((target) => {
       const element = getTargetElement(target);
-      if (element === realSourceElement || !areAssociatedElements(realSourceElement, element)) {
+      if (element === realSourceElement || !isAssociatedElementTargetForSource(sourceTarget, target)) {
         return;
       }
 
@@ -2113,18 +2113,22 @@ function captureSvgStyleSnapshot(element) {
   }));
 }
 
-function applySvgStyleSnapshot(snapshot) {
+function applySvgStyleSnapshot(snapshot, targetElement = null) {
   if (!Array.isArray(snapshot)) {
     return;
   }
 
-  snapshot.forEach((entry) => {
-    if (!(entry?.element instanceof Element) || !entry.styles) {
+  const targetElements =
+    targetElement instanceof Element ? getSvgPaintSnapshotElements(targetElement) : [];
+
+  snapshot.forEach((entry, index) => {
+    const element = targetElement instanceof Element ? targetElements[index] : entry?.element;
+    if (!(element instanceof Element) || !entry.styles) {
       return;
     }
 
     ADJUSTABLE_SVG_STYLE_PROPS.forEach((prop) => {
-      entry.element.style[prop] = entry.styles[prop] || "";
+      element.style[prop] = entry.styles[prop] || "";
     });
   });
 }
@@ -2923,7 +2927,8 @@ function renderFillPopoverControls() {
   const isShadowSource = state.fillPopoverSource === "shadow";
   const isOverlay = state.fillPopoverOverlayIndex !== null;
   const isResourceTarget = isSvgResourceTarget(state.adjustTarget);
-  const mode = isShadowSource || isOverlay || isResourceTarget ? "solid" : state.fillPopoverMode === "gradient" ? "gradient" : "solid";
+  const supportsGradient = !isShadowSource && !isOverlay && !isResourceTarget;
+  const mode = supportsGradient && state.fillPopoverMode === "gradient" ? "gradient" : "solid";
   const solidColor = cloneHsvaColor(
     state.fillPopoverSolidColor || colorStringToHsva(DEFAULT_FILL_CSS) || { h: 0, s: 0, v: 0, a: 1 }
   );
@@ -2938,15 +2943,15 @@ function renderFillPopoverControls() {
   state.fillPopoverGradientActiveStop = activeStopIndex;
   state.fillControls.modeSolid.dataset.state = mode === "solid" ? "active" : "inactive";
   state.fillControls.modeGradient.dataset.state = mode === "gradient" ? "active" : "inactive";
-  state.fillControls.modeGradient.disabled = isOverlay || isShadowSource || isResourceTarget;
-  state.fillControls.modeGradient.hidden = isShadowSource || isResourceTarget;
-  state.fillControls.modeGradient.setAttribute("aria-disabled", isOverlay || isShadowSource || isResourceTarget ? "true" : "false");
+  state.fillControls.modeGradient.disabled = !supportsGradient;
+  state.fillControls.modeGradient.hidden = !supportsGradient;
+  state.fillControls.modeGradient.setAttribute("aria-disabled", supportsGradient ? "false" : "true");
   if (state.fillControls.modeSolid) {
-    state.fillControls.modeSolid.hidden = isShadowSource;
+    state.fillControls.modeSolid.hidden = !supportsGradient;
   }
   if (state.fillControls.modeSolid?.parentElement) {
-    state.fillControls.modeSolid.parentElement.hidden = isShadowSource;
-    state.fillControls.modeSolid.parentElement.style.display = isShadowSource ? "none" : "";
+    state.fillControls.modeSolid.parentElement.hidden = !supportsGradient;
+    state.fillControls.modeSolid.parentElement.style.display = supportsGradient ? "" : "none";
   }
 
   if (state.fillControls.gradientControls) {

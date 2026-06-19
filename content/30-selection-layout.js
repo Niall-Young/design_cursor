@@ -102,17 +102,22 @@ function areAssociationBoxesCompatible(sourceProfile, candidateProfile) {
   );
 }
 
-function areAssociatedElements(sourceElement, candidateElement) {
+function areAssociationElementsCompatible(sourceElement, candidateElement, options = {}) {
+  const requireSameParent = options.requireSameParent !== false;
+  const allowStructuralMatch = options.allowStructuralMatch === true;
   if (
     !(sourceElement instanceof Element) ||
     !(candidateElement instanceof Element) ||
     sourceElement === candidateElement ||
-    sourceElement.parentElement !== candidateElement.parentElement ||
     sourceElement.contains(candidateElement) ||
     candidateElement.contains(sourceElement) ||
     !isSelectableElement(candidateElement) ||
     !hasVisibleBox(candidateElement)
   ) {
+    return false;
+  }
+
+  if (requireSameParent && sourceElement.parentElement !== candidateElement.parentElement) {
     return false;
   }
 
@@ -145,8 +150,20 @@ function areAssociatedElements(sourceElement, candidateElement) {
   if (roleMatch) score += 1;
   if (layoutMatch) score += 1;
   if (boxMatch) score += 2;
+  if (allowStructuralMatch) score += 2;
 
   return score >= 5 || (classMatch && boxMatch) || (childSignatureMatch && layoutMatch && boxMatch);
+}
+
+function areAssociatedElements(sourceElement, candidateElement) {
+  return areAssociationElementsCompatible(sourceElement, candidateElement);
+}
+
+function areAssociatedDescendantElements(sourceElement, candidateElement) {
+  return areAssociationElementsCompatible(sourceElement, candidateElement, {
+    requireSameParent: false,
+    allowStructuralMatch: true
+  });
 }
 
 function getDirectAssociatedElementTargetsForElement(sourceElement) {
@@ -160,27 +177,92 @@ function getDirectAssociatedElementTargetsForElement(sourceElement) {
     .map((element) => createElementTarget(element));
 }
 
-function findAssociationSourceElement(element) {
-  if (!(element instanceof Element)) {
+function getElementPathWithinAncestor(ancestor, descendant) {
+  if (!(ancestor instanceof Element) || !(descendant instanceof Element) || !ancestor.contains(descendant)) {
+    return [];
+  }
+
+  const path = [];
+  let current = descendant;
+
+  while (current instanceof Element && current !== ancestor) {
+    const parent = current.parentElement;
+    if (!(parent instanceof Element)) {
+      return [];
+    }
+
+    const index = Array.prototype.indexOf.call(parent.children, current);
+    if (index < 0) {
+      return [];
+    }
+    path.unshift(index);
+    current = parent;
+  }
+
+  return current === ancestor ? path : [];
+}
+
+function getDescendantByElementPath(root, path) {
+  if (!(root instanceof Element) || !Array.isArray(path)) {
     return null;
   }
 
-  let current = element;
-  let fallback = element;
+  let current = root;
+  for (const index of path) {
+    const next = current.children?.[index] || null;
+    if (!(next instanceof Element)) {
+      return null;
+    }
+    current = next;
+  }
+
+  return current;
+}
+
+function getAssociatedDescendantElementTargets(sourceElement) {
+  if (!(sourceElement instanceof Element)) {
+    return [];
+  }
+
+  let ancestor = getSelectableParent(sourceElement);
   let depth = 0;
 
-  while (current instanceof Element && isSelectableElement(current) && depth < 5) {
-    const directTargets = getDirectAssociatedElementTargetsForElement(current);
-    if (directTargets.length > 1) {
-      return current;
+  while (ancestor instanceof Element && depth < 5) {
+    const path = getElementPathWithinAncestor(ancestor, sourceElement);
+    const ancestorTargets = path.length ? getDirectAssociatedElementTargetsForElement(ancestor) : [];
+
+    if (ancestorTargets.length > 1) {
+      const descendantTargets = ancestorTargets
+        .map((target) => getTargetElement(target))
+        .map((associatedAncestor) =>
+          associatedAncestor === ancestor
+            ? sourceElement
+            : getDescendantByElementPath(associatedAncestor, path)
+        )
+        .filter((candidate) => {
+          if (candidate === sourceElement) {
+            return true;
+          }
+          return (
+            candidate instanceof Element &&
+            isSelectableElement(candidate) &&
+            hasVisibleBox(candidate) &&
+            areAssociatedDescendantElements(sourceElement, candidate)
+          );
+        })
+        .map((element) => createElementTarget(element));
+
+      const mergedTargets = mergeTargetsByIdentity(descendantTargets);
+      if (mergedTargets.length > 1) {
+        return mergedTargets;
+      }
     }
 
-    fallback = current;
-    current = getSelectableParent(current);
+    ancestor = getSelectableParent(ancestor);
     depth += 1;
   }
 
-  return fallback;
+  return [];
 }
 
 function getAssociationPrimaryTarget(target) {
@@ -188,8 +270,7 @@ function getAssociationPrimaryTarget(target) {
     return target;
   }
 
-  const sourceElement = findAssociationSourceElement(getTargetElement(target));
-  return sourceElement instanceof Element ? createElementTarget(sourceElement) : target;
+  return target;
 }
 
 function getAssociatedElementTargets(target) {
@@ -200,7 +281,20 @@ function getAssociatedElementTargets(target) {
   const primaryTarget = getAssociationPrimaryTarget(target);
   const sourceElement = getTargetElement(primaryTarget);
   const directTargets = getDirectAssociatedElementTargetsForElement(sourceElement);
-  return directTargets.length ? directTargets : [primaryTarget];
+  if (directTargets.length > 1) {
+    return directTargets;
+  }
+
+  const descendantTargets = getAssociatedDescendantElementTargets(sourceElement);
+  return descendantTargets.length ? descendantTargets : [primaryTarget];
+}
+
+function isAssociatedElementTargetForSource(sourceTarget, candidateTarget) {
+  if (!isElementTarget(sourceTarget) || !isElementTarget(candidateTarget)) {
+    return false;
+  }
+
+  return getAssociatedElementTargets(sourceTarget).some((target) => isSameTarget(target, candidateTarget));
 }
 
 function mergeTargetsByIdentity(targets) {
