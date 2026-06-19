@@ -15,6 +15,36 @@ function pointInRect(clientX, clientY, rect) {
   return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
 }
 
+function getFallbackTextNodeFromPoint(clientX, clientY) {
+  const element = document.elementFromPoint(clientX, clientY);
+  if (!(element instanceof Element) || isToolbarElement(element)) {
+    return null;
+  }
+
+  const stack = [element];
+  let inspected = 0;
+  while (stack.length && inspected < 160) {
+    const node = stack.shift();
+    inspected += 1;
+
+    if (node?.nodeType === Node.TEXT_NODE) {
+      if (
+        hasMeaningfulText(node) &&
+        getTextNodeClientRects(node).some((rect) => pointInRect(clientX, clientY, rect))
+      ) {
+        return node;
+      }
+      continue;
+    }
+
+    if (node instanceof Element && !isToolbarElement(node)) {
+      stack.unshift(...node.childNodes);
+    }
+  }
+
+  return null;
+}
+
 function getTextNodeFromPoint(clientX, clientY) {
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
     return null;
@@ -31,7 +61,7 @@ function getTextNodeFromPoint(clientX, clientY) {
   }
 
   if (!hasMeaningfulText(textNode)) {
-    return null;
+    textNode = getFallbackTextNodeFromPoint(clientX, clientY);
   }
 
   const rects = getTextNodeClientRects(textNode);
@@ -72,7 +102,15 @@ function normalizeSelectableTarget(node, clientX, clientY) {
     return null;
   }
 
-  if (state.selectionMode === "layout" || state.selectionMode === "adjust") {
+  if (state.selectionMode === "layout") {
+    return createElementTarget(candidateElement);
+  }
+
+  if (state.selectionMode === "adjust") {
+    const textNode = getTextNodeFromPoint(clientX, clientY);
+    if (hasMeaningfulText(textNode) && candidateElement.contains(textNode.parentElement)) {
+      return createTextTarget(textNode);
+    }
     return createElementTarget(candidateElement);
   }
 

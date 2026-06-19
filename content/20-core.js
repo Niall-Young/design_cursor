@@ -1197,9 +1197,9 @@ function captureHistoryInverseEntry(entry) {
     if (Array.isArray(entry.items) && entry.items.length) {
       return {
         type: "style-inline",
-        items: entry.items.map(({ element }) => ({
-          element,
-          snapshot: captureAdjustableStyleSnapshot(element)
+        items: entry.items.map((item) => ({
+          element: item.element,
+          snapshot: captureAdjustableStyleSnapshot(item.element, item.snapshot?.text?.node)
         }))
       };
     }
@@ -1207,7 +1207,7 @@ function captureHistoryInverseEntry(entry) {
     return {
       type: "style-inline",
       element: entry.element,
-      snapshot: captureAdjustableStyleSnapshot(entry.element)
+      snapshot: captureAdjustableStyleSnapshot(entry.element, entry.snapshot?.text?.node)
     };
   }
 
@@ -1243,6 +1243,16 @@ function restoreElementPosition(element, position) {
     parent.appendChild(element);
   }
   return true;
+}
+
+function findSelectedTargetForStyleSnapshot(element, snapshot = null) {
+  const textNode = snapshot?.text?.node || null;
+  return state.selectedTargets.find((target) => {
+    if (target.kind === "text") {
+      return Boolean(textNode && target.node === textNode);
+    }
+    return isElementTarget(target) && getTargetElement(target) === element;
+  });
 }
 
 function restoreHistoryEntry(entry) {
@@ -1283,9 +1293,7 @@ function restoreHistoryEntry(entry) {
     if (Array.isArray(entry.items) && entry.items.length) {
       entry.items.forEach((item) => {
         applyAdjustableStyleSnapshot(item.element, item.snapshot);
-        const restoredTarget = state.selectedTargets.find(
-          (target) => isElementTarget(target) && getTargetElement(target) === item.element
-        );
+        const restoredTarget = findSelectedTargetForStyleSnapshot(item.element, item.snapshot);
         if (restoredTarget) {
           refreshAdjustPromptText(restoredTarget);
         }
@@ -1299,9 +1307,7 @@ function restoreHistoryEntry(entry) {
     }
 
     applyAdjustableStyleSnapshot(entry.element, entry.snapshot);
-    const restoredTarget = state.selectedTargets.find(
-      (target) => isElementTarget(target) && getTargetElement(target) === entry.element
-    );
+    const restoredTarget = findSelectedTargetForStyleSnapshot(entry.element, entry.snapshot);
     if (restoredTarget) {
       refreshAdjustPromptText(restoredTarget);
     }

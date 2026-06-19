@@ -1,6 +1,10 @@
 // Adjustment mode utilities and the fill/shadow/style editor logic live here.
 const ADJUSTABLE_STYLE_PROPS = [
   "color",
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "textAlign",
   "display",
   "flexDirection",
   "justifyContent",
@@ -10,6 +14,8 @@ const ADJUSTABLE_STYLE_PROPS = [
   "flexBasis",
   "minWidth",
   "minHeight",
+  "maxWidth",
+  "maxHeight",
   "width",
   "height",
   "gap",
@@ -133,6 +139,77 @@ function clampNumber(value, min, max, fallback = min) {
 
 function normalizeAdjustBorderRadius(value, fallback = 0) {
   return Math.round(clampNumber(value, 0, ADJUST_MAX_BORDER_RADIUS, fallback));
+}
+
+function isTextAdjustTarget(target) {
+  return target?.kind === "text" && target.node?.nodeType === Node.TEXT_NODE;
+}
+
+function getAdjustTextNode(target) {
+  return isTextAdjustTarget(target) ? target.node : null;
+}
+
+function getAdjustTextContent(target) {
+  const textNode = getAdjustTextNode(target);
+  return textNode ? textNode.textContent || "" : "";
+}
+
+function normalizeFontWeightValue(value, fallback = 400) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "bold") {
+    return 700;
+  }
+  if (normalized === "normal") {
+    return 400;
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.round(clampNumber(parsed, 1, 1000, fallback));
+}
+
+function normalizeTextAlignValue(value, fallback = "left") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["left", "center", "right"].includes(normalized)) {
+    return normalized;
+  }
+  if (normalized === "start" || normalized === "-webkit-left") {
+    return "left";
+  }
+  if (normalized === "end" || normalized === "-webkit-right") {
+    return "right";
+  }
+  if (normalized === "-webkit-center") {
+    return "center";
+  }
+  return fallback;
+}
+
+function parseLineHeightValue(value, fontSize = 0, fallback = 0) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const fontSizeValue = Number.parseFloat(fontSize);
+  const fallbackValue = Number.isFinite(fontSizeValue) && fontSizeValue > 0 ? Math.round(fontSizeValue * 1.2) : fallback;
+  if (!normalized || normalized === "normal") {
+    return fallbackValue;
+  }
+  if (normalized.endsWith("px")) {
+    return parsePixelValue(normalized, fallbackValue);
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) {
+    return fallbackValue;
+  }
+  if (parsed > 0 && parsed < 10 && Number.isFinite(fontSizeValue) && fontSizeValue > 0) {
+    return Math.round(parsed * fontSizeValue);
+  }
+  return Math.round(parsed);
+}
+
+function formatAdjustTextPreview(value) {
+  return truncate(String(value || "").replace(/\s+/g, " ").trim(), 80) || "空";
 }
 
 function normalizeHexColor(value) {
@@ -1211,9 +1288,14 @@ function refreshAdjustPopoverControlRefs() {
     ...state.adjustControls,
     body: state.adjustPopover.querySelector(".chat-context-picker-adjust-body"),
     title: state.adjustPopover.querySelector(".chat-context-picker-adjust-title"),
+    associationRow: state.adjustPopover.querySelector(".chat-context-picker-association-row"),
     associationModeToggle: state.adjustPopover.querySelector('[data-action="toggle-association-mode"]'),
+    textSection: state.adjustPopover.querySelector('[data-adjust-section="text"]'),
+    textDivider: state.adjustPopover.querySelector('[data-adjust-divider="text"]'),
     layoutSection: state.adjustPopover.querySelector('[data-adjust-section="layout"]'),
     layoutDivider: state.adjustPopover.querySelector('[data-adjust-divider="layout"]'),
+    paddingSection: state.adjustPopover.querySelector('[data-adjust-section="padding"]'),
+    paddingDivider: state.adjustPopover.querySelector('[data-adjust-divider="padding"]'),
     resourceActions: state.adjustPopover.querySelector('[data-adjust-resource-actions]'),
     resourceDownloadButton: state.adjustPopover.querySelector('[data-action="download-resource"]'),
     fillStack: state.adjustPopover.querySelector('[data-adjust-stack="fill"]'),
@@ -1223,6 +1305,13 @@ function refreshAdjustPopoverControlRefs() {
     backgroundColorAlpha: state.adjustPopover.querySelector('[data-adjust-alpha="backgroundColor"]'),
     backgroundColorRow: state.adjustPopover.querySelector('[data-adjust-row="fill"]'),
     backgroundColorSwatch: state.adjustPopover.querySelector('[data-adjust-swatch="backgroundColor"]'),
+    textContent: state.adjustPopover.querySelector('[data-adjust-textarea="textContent"]'),
+    textColorInput: state.adjustPopover.querySelector('[data-adjust-input="textColor"]'),
+    textColorText: state.adjustPopover.querySelector('[data-adjust-text="textColor"]'),
+    textColorSwatch: state.adjustPopover.querySelector('[data-adjust-swatch="textColor"]'),
+    fontSize: state.adjustPopover.querySelector('[data-adjust-input="fontSize"]'),
+    fontWeight: state.adjustPopover.querySelector('[data-adjust-input="fontWeight"]'),
+    lineHeight: state.adjustPopover.querySelector('[data-adjust-input="lineHeight"]'),
     widthRow: state.adjustPopover.querySelector('[data-adjust-size-row="width"]'),
     heightRow: state.adjustPopover.querySelector('[data-adjust-size-row="height"]'),
     outerShadowRow: state.adjustPopover.querySelector('[data-adjust-row="shadow-outer"]'),
@@ -1645,7 +1734,7 @@ function renderAdjustLayerRows(target) {
   pruneAdjustLayerSelection();
 }
 
-function captureAdjustableStyleSnapshot(element) {
+function captureAdjustableStyleSnapshot(element, textNode = null) {
   const self = ADJUSTABLE_STYLE_PROPS.reduce((snapshot, prop) => {
     snapshot[prop] = element?.style?.[prop] || "";
     return snapshot;
@@ -1662,8 +1751,14 @@ function captureAdjustableStyleSnapshot(element) {
   const svgPaint = element instanceof Element && isSvgResourceElement(element)
     ? captureSvgStyleSnapshot(element)
     : [];
+  const text = textNode?.nodeType === Node.TEXT_NODE
+    ? {
+        node: textNode,
+        value: textNode.textContent || ""
+      }
+    : null;
 
-  return { self, children, svgPaint };
+  return { self, children, svgPaint, text };
 }
 
 function applyAdjustableStyleSnapshot(element, snapshot) {
@@ -1692,6 +1787,9 @@ function applyAdjustableStyleSnapshot(element, snapshot) {
   }
 
   applySvgStyleSnapshot(snapshot.svgPaint, element);
+  if (snapshot.text?.node?.nodeType === Node.TEXT_NODE && snapshot.text.node.isConnected) {
+    snapshot.text.node.textContent = snapshot.text.value || "";
+  }
 }
 
 function areStyleSnapshotsEqual(a, b) {
@@ -1703,6 +1801,12 @@ function areStyleSnapshotsEqual(a, b) {
   }
 
   if (!areSvgStyleSnapshotsEqual(a?.svgPaint, b?.svgPaint)) {
+    return false;
+  }
+
+  const aText = a?.text || null;
+  const bText = b?.text || null;
+  if ((aText?.node || null) !== (bText?.node || null) || (aText?.value || "") !== (bText?.value || "")) {
     return false;
   }
 
@@ -1757,7 +1861,10 @@ function getCurrentAdjustStyleElements(primaryElement = null) {
   return elements;
 }
 
-function captureAdjustableStyleGroupSnapshot(elements) {
+function captureAdjustableStyleGroupSnapshot(elements, sourceTarget = null) {
+  const textNode = getAdjustTextNode(sourceTarget);
+  const textElement = textNode ? getTargetElement(sourceTarget) : null;
+
   return {
     items: mergeTargetsByIdentity(
       (elements || [])
@@ -1767,7 +1874,7 @@ function captureAdjustableStyleGroupSnapshot(elements) {
       const element = getTargetElement(target);
       return {
         element,
-        snapshot: captureAdjustableStyleSnapshot(element)
+        snapshot: captureAdjustableStyleSnapshot(element, element === textElement ? textNode : null)
       };
     })
   };
@@ -1809,7 +1916,7 @@ function areStyleGroupSnapshotsEqual(a, b) {
 }
 
 function captureCurrentAdjustStyleBaseline(primaryElement = null) {
-  return captureAdjustableStyleGroupSnapshot(getCurrentAdjustStyleElements(primaryElement));
+  return captureAdjustableStyleGroupSnapshot(getCurrentAdjustStyleElements(primaryElement), state.adjustTarget);
 }
 
 function syncAssociatedAdjustTargetsFromSource() {
@@ -2381,8 +2488,18 @@ function getAdjustValues(target) {
   const isFlex = styles.display === "flex" || styles.display === "inline-flex";
   const fillInfo = getAdjustFillInfo(styles, element);
   const shadowLayers = getShadowLayers(styles.boxShadow);
+  const fontSize = parsePixelValue(styles.fontSize);
+  const textColor = parseAdjustColor(styles.color);
 
   return {
+    isTextTarget: isTextAdjustTarget(target),
+    textContent: getAdjustTextContent(target),
+    fontSize,
+    fontWeight: normalizeFontWeightValue(styles.fontWeight),
+    lineHeight: parseLineHeightValue(styles.lineHeight, fontSize),
+    textAlign: normalizeTextAlignValue(styles.textAlign),
+    textColor: textColor?.hex || DEFAULT_FILL_HEX,
+    textColorCss: textColor?.css || styles.color || DEFAULT_FILL_HEX,
     layoutDirection: isFlex ? (styles.flexDirection.startsWith("column") ? "column" : "row") : "none",
     justifyContent: styles.justifyContent || "flex-start",
     alignItems: styles.alignItems || "stretch",
@@ -2701,6 +2818,7 @@ function buildAdjustShadowOperationLogs(target) {
 function getAdjustPromptText(target) {
   const values = getAdjustValues(target);
   const isResourceTarget = isSvgResourceTarget(target);
+  const isTextTarget = isTextAdjustTarget(target);
   const physicalAlignment = getPhysicalAlignment(values);
   const directionLabel =
     values.layoutDirection === "row" ? "横向" : values.layoutDirection === "column" ? "纵向" : "关闭";
@@ -2725,9 +2843,19 @@ function getAdjustPromptText(target) {
         : `${values.gap}px`;
   const fillOperations = buildAdjustFillOperationLogs(persistedTarget);
   const shadowOperations = buildAdjustShadowOperationLogs(persistedTarget);
+  const textAlignLabel =
+    {
+      left: "左对齐",
+      center: "居中",
+      right: "右对齐"
+    }[values.textAlign] || values.textAlign;
 
   const lines = [];
-  if (!isResourceTarget) {
+  if (isTextTarget) {
+    lines.push(
+      `文字：文案「${formatAdjustTextPreview(values.textContent)}」，字号 ${values.fontSize}px，字重 ${values.fontWeight}，行高 ${values.lineHeight}px，${textAlignLabel}，文字颜色 ${formatAdjustColorValue(values.textColorCss || values.textColor)}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`
+    );
+  } else if (!isResourceTarget) {
     lines.push(
       `布局：${directionLabel}，尺寸 ${values.width}px × ${values.height}px，对齐 ${verticalLabel}${horizontalLabel}，间距 ${spacingLabel}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`
     );
@@ -3597,15 +3725,31 @@ function syncAdjustResourceMode(target) {
   }
 
   const isResourceTarget = isSvgResourceTarget(target);
-  state.adjustPopover.dataset.targetType = isResourceTarget ? "svg-resource" : "element";
+  const isTextTarget = isTextAdjustTarget(target);
+  state.adjustPopover.dataset.targetType = isResourceTarget ? "svg-resource" : isTextTarget ? "text" : "element";
   if (state.adjustControls.title) {
-    state.adjustControls.title.textContent = isResourceTarget ? "调整 SVG" : "调整样式";
+    state.adjustControls.title.textContent = isResourceTarget ? "调整 SVG" : isTextTarget ? "调整文字" : "调整样式";
+  }
+  if (state.adjustControls.associationRow) {
+    state.adjustControls.associationRow.hidden = isTextTarget;
+  }
+  if (state.adjustControls.textSection) {
+    state.adjustControls.textSection.hidden = !isTextTarget || isResourceTarget;
+  }
+  if (state.adjustControls.textDivider) {
+    state.adjustControls.textDivider.hidden = !isTextTarget || isResourceTarget;
   }
   if (state.adjustControls.layoutSection) {
-    state.adjustControls.layoutSection.hidden = isResourceTarget;
+    state.adjustControls.layoutSection.hidden = isResourceTarget || isTextTarget;
   }
   if (state.adjustControls.layoutDivider) {
-    state.adjustControls.layoutDivider.hidden = isResourceTarget;
+    state.adjustControls.layoutDivider.hidden = isResourceTarget || isTextTarget;
+  }
+  if (state.adjustControls.paddingSection) {
+    state.adjustControls.paddingSection.hidden = isResourceTarget;
+  }
+  if (state.adjustControls.paddingDivider) {
+    state.adjustControls.paddingDivider.hidden = isResourceTarget;
   }
   if (state.adjustControls.resourceActions) {
     state.adjustControls.resourceActions.hidden = !isResourceTarget;
@@ -4357,6 +4501,7 @@ function syncAdjustPopoverFromTarget(target) {
   const activeBaseShadowType =
     isShadowPopoverOpen && state.shadowPopoverOverlayIndex === null ? state.shadowPopoverType : null;
   syncAdjustSegments("layoutDirection", values.layoutDirection);
+  syncAdjustSegments("textAlign", values.textAlign);
   syncAdjustAlignmentGrid(values);
   const baseFillSwatch = persistedTarget?.adjustFillType === "gradient" && persistedTarget?.adjustStoredBackgroundImage
     ? persistedTarget.adjustStoredBackgroundImage
@@ -4398,6 +4543,29 @@ function syncAdjustPopoverFromTarget(target) {
       persistedTarget?.adjustFillEnabled ? baseFillSwatch : "transparent"
     );
     state.adjustControls.backgroundColorSwatch.style.borderColor = persistedTarget?.adjustFillEnabled ? "transparent" : "#ebebeb";
+  }
+  if (state.adjustControls.textContent && document.activeElement !== state.adjustControls.textContent) {
+    state.adjustControls.textContent.value = values.textContent;
+  }
+  if (state.adjustControls.fontSize) {
+    state.adjustControls.fontSize.value = String(values.fontSize);
+  }
+  if (state.adjustControls.fontWeight) {
+    state.adjustControls.fontWeight.value = String(values.fontWeight);
+  }
+  if (state.adjustControls.lineHeight) {
+    state.adjustControls.lineHeight.value = String(values.lineHeight);
+  }
+  if (state.adjustControls.textColorInput) {
+    state.adjustControls.textColorInput.value = values.textColor || DEFAULT_FILL_HEX;
+  }
+  if (state.adjustControls.textColorText && document.activeElement !== state.adjustControls.textColorText) {
+    state.adjustControls.textColorText.value = formatAdjustColorHexValue(values.textColorCss || values.textColor, "000000");
+  }
+  if (state.adjustControls.textColorSwatch) {
+    state.adjustControls.textColorSwatch.dataset.empty = "false";
+    state.adjustControls.textColorSwatch.style.setProperty("--swatch-color", values.textColorCss || values.textColor || DEFAULT_FILL_HEX);
+    state.adjustControls.textColorSwatch.style.borderColor = "transparent";
   }
   if (state.adjustControls.width) {
     state.adjustControls.width.value = String(values.width);
@@ -4699,6 +4867,35 @@ function applyAdjustControl(prop, rawValue, { commit = false, sync = true } = {}
 
   if (!state.adjustStyleBaseline) {
     state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
+  }
+
+  if (prop === "textContent") {
+    const textNode = getAdjustTextNode(state.adjustTarget);
+    if (textNode) {
+      textNode.textContent = String(rawValue ?? "");
+    }
+  }
+
+  if (prop === "fontSize") {
+    element.style.fontSize = `${clampNumber(rawValue, 1, 999, 16)}px`;
+  }
+
+  if (prop === "fontWeight") {
+    element.style.fontWeight = String(normalizeFontWeightValue(rawValue));
+  }
+
+  if (prop === "lineHeight") {
+    element.style.lineHeight = `${clampNumber(rawValue, 1, 999, 20)}px`;
+  }
+
+  if (prop === "textAlign") {
+    element.style.textAlign = normalizeTextAlignValue(rawValue);
+    syncAdjustSegments("textAlign", normalizeTextAlignValue(rawValue));
+  }
+
+  if (prop === "textColor") {
+    const parsed = parseAdjustColorInputValue(rawValue);
+    element.style.color = parsed ? parsed.css : "";
   }
 
   if (prop === "layoutDirection") {

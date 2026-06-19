@@ -1511,6 +1511,42 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   padding: 5px 12px;
 }
 
+.chat-context-picker-adjust-text-color-row {
+  gap: 0;
+  min-height: 32px;
+  padding: 5px 12px;
+}
+
+.chat-context-picker-adjust-textarea-row {
+  display: flex;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.chat-context-picker-adjust-textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 96px;
+  border: none;
+  outline: none;
+  resize: vertical;
+  padding: 0;
+  background: transparent;
+  color: #333333;
+  font-size: 14px;
+  line-height: 20px;
+  font-family: inherit;
+}
+
+.chat-context-picker-adjust-textarea::placeholder {
+  color: #b4b4b4;
+}
+
 .chat-context-picker-adjust-fill-prefix {
   display: inline-flex;
   align-items: center;
@@ -1549,6 +1585,12 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   line-height: 22px;
 }
 
+.chat-context-picker-adjust-input-prefix-wide {
+  width: 20px;
+  min-width: 20px;
+  font-size: 11px;
+}
+
 .chat-context-picker-shadow-input-prefix,
 .chat-context-picker-shadow-input-icon {
   display: inline-flex;
@@ -1585,7 +1627,16 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   margin: 0 12px;
 }
 
+.chat-context-picker-adjust-text-color-row .chat-context-picker-adjust-input-divider {
+  height: 18px;
+  margin: 0 12px;
+}
+
 .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-fill-prefix + .chat-context-picker-adjust-input-divider {
+  margin: 0 12px;
+}
+
+.chat-context-picker-adjust-text-color-row .chat-context-picker-adjust-fill-prefix + .chat-context-picker-adjust-input-divider {
   margin: 0 12px;
 }
 
@@ -1626,6 +1677,11 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   color: #333333;
 }
 
+.chat-context-picker-adjust-text-color-row .chat-context-picker-adjust-style-input {
+  flex: 1 1 auto;
+  color: #333333;
+}
+
 .chat-context-picker-shadow-input,
 .chat-context-picker-shadow-text-input,
 .chat-context-picker-shadow-percent-input,
@@ -1658,7 +1714,9 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 .chat-context-picker-adjust-inline-input:focus,
 .chat-context-picker-adjust-inline-input:focus-visible,
 .chat-context-picker-adjust-style-input:focus,
-.chat-context-picker-adjust-style-input:focus-visible {
+.chat-context-picker-adjust-style-input:focus-visible,
+.chat-context-picker-adjust-textarea:focus,
+.chat-context-picker-adjust-textarea:focus-visible {
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
@@ -1944,6 +2002,11 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   height: 14px;
 }
 
+.chat-context-picker-adjust-text-color-row .chat-context-picker-adjust-swatch-button {
+  width: 14px;
+  height: 14px;
+}
+
 .chat-context-picker-shadow-swatch-button,
 .chat-context-picker-fill-swatch-button {
   position: relative;
@@ -1970,6 +2033,12 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 }
 
 .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.chat-context-picker-adjust-text-color-row .chat-context-picker-adjust-swatch {
   width: 14px;
   height: 14px;
   border-radius: 3px;
@@ -2159,6 +2228,11 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   box-shadow: 0 0 0 1px rgba(42, 89, 255, 0.12);
 }
 
+.chat-context-picker-adjust-textarea-row:focus-within {
+  border-color: rgba(42, 89, 255, 0.36);
+  box-shadow: 0 0 0 1px rgba(42, 89, 255, 0.12);
+}
+
 .chat-context-picker-adjust-style-row:focus-within {
   border-color: #ebebeb;
   box-shadow: none;
@@ -2172,6 +2246,7 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 }
 
 .chat-context-picker-adjust-input-row:hover,
+.chat-context-picker-adjust-textarea-row:hover,
 .chat-context-picker-adjust-style-row:hover,
 .chat-context-picker-adjust-align-cell:hover,
 .chat-context-picker-adjust-segment:hover {
@@ -2195,6 +2270,7 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 }
 
 .chat-context-picker-adjust-popover input,
+.chat-context-picker-adjust-popover textarea,
 .chat-context-picker-adjust-popover button {
   font-family: inherit;
 }
@@ -2698,6 +2774,7 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 .chat-context-picker-shadow-segment,
 .chat-context-picker-adjust-inline-input,
 .chat-context-picker-adjust-style-input,
+.chat-context-picker-adjust-textarea,
 .chat-context-picker-shadow-input,
 .chat-context-picker-shadow-text-input,
 .chat-context-picker-shadow-percent-input,

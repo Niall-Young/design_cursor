@@ -292,6 +292,27 @@ const ICONS = {
       <path d="M0.5 0C0.776142 0 1 0.223858 1 0.5V10.5C1 10.7761 0.776142 11 0.5 11C0.223858 11 0 10.7761 0 10.5V0.5C0 0.223858 0.223858 0 0.5 0ZM8.5 0C8.77614 0 9 0.223858 9 0.5V10.5C9 10.7761 8.77614 11 8.5 11C8.22386 11 8 10.7761 8 10.5V0.5C8 0.223858 8.22386 0 8.5 0ZM5 2.5C5.82843 2.5 6.5 3.17157 6.5 4V7C6.5 7.82843 5.82843 8.5 5 8.5H4C3.17157 8.5 2.5 7.82843 2.5 7V4C2.5 3.17157 3.17157 2.5 4 2.5H5ZM4 3.5C3.72386 3.5 3.5 3.72386 3.5 4V7C3.5 7.27614 3.72386 7.5 4 7.5H5C5.27614 7.5 5.5 7.27614 5.5 7V4C5.5 3.72386 5.27614 3.5 5 3.5H4Z" fill="currentColor" />
     </svg>
   `,
+  alignLeft: `
+    <svg class="lucide lucide-align-left" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M15 12H3" />
+      <path d="M17 18H3" />
+      <path d="M21 6H3" />
+    </svg>
+  `,
+  alignCenter: `
+    <svg class="lucide lucide-align-center" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M17 12H7" />
+      <path d="M19 18H5" />
+      <path d="M21 6H3" />
+    </svg>
+  `,
+  alignRight: `
+    <svg class="lucide lucide-align-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12H9" />
+      <path d="M21 18H7" />
+      <path d="M21 6H3" />
+    </svg>
+  `,
   padTop: `
     <svg class="lucide lucide-panel-top" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect width="18" height="18" x="3" y="3" rx="2" />
