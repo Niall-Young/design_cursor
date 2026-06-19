@@ -325,17 +325,17 @@ function ensureAdjustPopover() {
       </label>
       <div class="chat-context-picker-adjust-grid chat-context-picker-adjust-grid-tight">
         <label class="chat-context-picker-adjust-input-row">
-          <span class="chat-context-picker-adjust-input-prefix">F</span>
+          <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("heading")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="fontSize" aria-label="字号" title="字号" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
-          <span class="chat-context-picker-adjust-input-prefix">W</span>
+          <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("bold")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="100" max="900" step="100" data-chat-context-picker-numeric="true" data-adjust-input="fontWeight" aria-label="字重" title="字重" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
-          <span class="chat-context-picker-adjust-input-prefix">H</span>
+          <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("separatorHorizontal")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="lineHeight" aria-label="行高" title="行高" />
         </label>

@@ -316,6 +316,25 @@ const ICONS = {
       <path d="M0.5 0C0.776142 0 1 0.223858 1 0.5V10.5C1 10.7761 0.776142 11 0.5 11C0.223858 11 0 10.7761 0 10.5V0.5C0 0.223858 0.223858 0 0.5 0ZM8.5 0C8.77614 0 9 0.223858 9 0.5V10.5C9 10.7761 8.77614 11 8.5 11C8.22386 11 8 10.7761 8 10.5V0.5C8 0.223858 8.22386 0 8.5 0ZM5 2.5C5.82843 2.5 6.5 3.17157 6.5 4V7C6.5 7.82843 5.82843 8.5 5 8.5H4C3.17157 8.5 2.5 7.82843 2.5 7V4C2.5 3.17157 3.17157 2.5 4 2.5H5ZM4 3.5C3.72386 3.5 3.5 3.72386 3.5 4V7C3.5 7.27614 3.72386 7.5 4 7.5H5C5.27614 7.5 5.5 7.27614 5.5 7V4C5.5 3.72386 5.27614 3.5 5 3.5H4Z" fill="currentColor" />
     </svg>
   `,
+  heading: `
+    <svg class="lucide lucide-heading" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 12h12" />
+      <path d="M6 20V4" />
+      <path d="M18 20V4" />
+    </svg>
+  `,
+  bold: `
+    <svg class="lucide lucide-bold" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+    </svg>
+  `,
+  separatorHorizontal: `
+    <svg class="lucide lucide-separator-horizontal" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m16 16-4 4-4-4" />
+      <path d="M3 12h18" />
+      <path d="m8 8 4-4 4 4" />
+    </svg>
+  `,
   alignLeft: `
     <svg class="lucide lucide-align-left" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M15 12H3" />
