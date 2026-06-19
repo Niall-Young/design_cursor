@@ -1990,13 +1990,19 @@ function swapElementPositions(firstElement, secondElement) {
 }
 
 function finishLayoutDrag(event) {
-  if (!state.dragSession || (event && event.button !== 0)) {
+  if (!state.dragSession) {
     return;
   }
 
   const dragSession = state.dragSession;
   const { draggedTarget, dropPlan } = dragSession;
   state.dragSession = null;
+
+  if (event?.type === "pointercancel") {
+    cleanupDragSessionArtifacts(dragSession);
+    refreshHighlights();
+    return;
+  }
 
   if (!draggedTarget || !dropPlan) {
     cleanupDragSessionArtifacts(dragSession);

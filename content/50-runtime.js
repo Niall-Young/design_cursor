@@ -448,27 +448,7 @@ function handlePointerMove(event) {
   }
 
   if (state.selectionMode === "layout" && state.dragSession) {
-    state.dragSession.clientX = event.clientX;
-    state.dragSession.clientY = event.clientY;
-    updateDragPreviewPosition(state.dragSession);
-    const dropPlan =
-      state.dragSession.dragMode === "selected-only"
-        ? getSelectedOnlyLayoutDropPlan(event.clientX, event.clientY, state.dragSession.draggedTarget)
-        : getLayoutDropPlan(event.clientX, event.clientY, state.dragSession.draggedTarget);
-    const dropTarget = dropPlan?.highlightTarget || null;
-    const dropPosition = dropPlan?.position || null;
-    if (
-      !isSameTarget(dropTarget, state.dragSession.dropTarget) ||
-      dropPosition !== state.dragSession.dropPosition ||
-      dropPlan?.operation !== state.dragSession.dropPlan?.operation
-    ) {
-      state.dragSession.dropPlan = dropPlan;
-      state.dragSession.dropTarget = dropTarget;
-      state.dragSession.dropPosition = dropPosition;
-    }
-    if (state.dragSession.dragMode === "free") {
-      moveLayoutPlaceholder(state.dragSession, dropPlan);
-    }
+    updateLayoutDragSession(event);
     refreshHighlights();
     return;
   }
@@ -552,6 +532,20 @@ function handlePointerDown(event) {
     return;
   }
 
+  if (state.selectionMode === "layout") {
+    const layoutHandle =
+      event.target instanceof Element
+        ? event.target.closest(".chat-context-picker-overlay-layout-handle:not(.chat-context-picker-overlay-layout-handle-dragging)")
+        : null;
+    const handleIndex = Number(layoutHandle?.dataset.index);
+    if (layoutHandle && Number.isInteger(handleIndex)) {
+      consumeInteractionEvent(event);
+      state.suppressClickUntil = Date.now() + 400;
+      startLayoutDrag(handleIndex, event, "selected-only");
+      return;
+    }
+  }
+
   if (isToolbarElement(event.target)) {
     if (modeButton) {
       event.preventDefault();
@@ -632,6 +626,13 @@ function handlePointerUp(event) {
     return;
   }
 
+  if (state.selectionMode === "layout" && state.dragSession) {
+    consumeInteractionEvent(event);
+    updateLayoutDragSession(event);
+    finishLayoutDrag(event);
+    return;
+  }
+
   if (isToolbarElement(event.target)) {
     return;
   }
@@ -656,6 +657,37 @@ function handlePointerUp(event) {
   }
 
   finishLayoutDrag(event);
+}
+
+function updateLayoutDragSession(event) {
+  if (!state.dragSession) {
+    return null;
+  }
+
+  state.dragSession.clientX = event.clientX;
+  state.dragSession.clientY = event.clientY;
+  updateDragPreviewPosition(state.dragSession);
+
+  const dropPlan =
+    state.dragSession.dragMode === "selected-only"
+      ? getSelectedOnlyLayoutDropPlan(event.clientX, event.clientY, state.dragSession.draggedTarget)
+      : getLayoutDropPlan(event.clientX, event.clientY, state.dragSession.draggedTarget);
+  const dropTarget = dropPlan?.highlightTarget || null;
+  const dropPosition = dropPlan?.position || null;
+  if (
+    !isSameTarget(dropTarget, state.dragSession.dropTarget) ||
+    dropPosition !== state.dragSession.dropPosition ||
+    dropPlan?.operation !== state.dragSession.dropPlan?.operation
+  ) {
+    state.dragSession.dropPlan = dropPlan;
+    state.dragSession.dropTarget = dropTarget;
+    state.dragSession.dropPosition = dropPosition;
+  }
+  if (state.dragSession.dragMode === "free") {
+    moveLayoutPlaceholder(state.dragSession, dropPlan);
+  }
+
+  return dropPlan;
 }
 
 function handleClick(event) {
