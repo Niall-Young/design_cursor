@@ -1507,18 +1507,9 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 
 .chat-context-picker-adjust-size-limit-row {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-}
-
-.chat-context-picker-adjust-size-limit-label {
-  min-width: 0;
-  color: #707070;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
-  white-space: nowrap;
 }
 
 .chat-context-picker-adjust-layout-row {

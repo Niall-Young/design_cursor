@@ -222,6 +222,30 @@ const ICONS = {
       <path d="m6 9 6 6 6-6" />
     </svg>
   `,
+  chevronsLeftRight: `
+    <svg class="lucide lucide-chevrons-left-right" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m9 7-5 5 5 5" />
+      <path d="m15 7 5 5-5 5" />
+    </svg>
+  `,
+  chevronsRightLeft: `
+    <svg class="lucide lucide-chevrons-right-left" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m20 7-5 5 5 5" />
+      <path d="m4 7 5 5-5 5" />
+    </svg>
+  `,
+  chevronsUpDown: `
+    <svg class="lucide lucide-chevrons-up-down" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m7 15 5 5 5-5" />
+      <path d="m7 9 5-5 5 5" />
+    </svg>
+  `,
+  chevronsDownUp: `
+    <svg class="lucide lucide-chevrons-down-up" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m7 4 5 5 5-5" />
+      <path d="m7 20 5-5 5 5" />
+    </svg>
+  `,
   eye: `
     <svg class="lucide lucide-eye" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />

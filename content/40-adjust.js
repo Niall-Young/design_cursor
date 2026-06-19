@@ -4507,7 +4507,7 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
   }
 
   const normalizedProp = prop === "height" ? "height" : "width";
-  const targetMode = normalizeAdjustSizeInputMode(mode, "fixed");
+  const rawMode = String(mode || "").trim();
   const rect = element.getBoundingClientRect();
   const parentContext = getParentFlexContext(element);
   const isMainAxis =
@@ -4519,13 +4519,14 @@ function applyAdjustSizeMode(prop, mode, { commit = false, sync = true } = {}) {
     state.adjustStyleBaseline = captureCurrentAdjustStyleBaseline(element);
   }
 
-  if (isAdjustSizeLimitMode(targetMode)) {
-    const styleProp = getAdjustSizeLimitProp(normalizedProp, targetMode);
+  if (isAdjustSizeLimitMode(rawMode)) {
+    const styleProp = getAdjustSizeLimitProp(normalizedProp, rawMode);
     const initialValue = element.style[styleProp] ? parsePixelValue(element.style[styleProp], 0) : parsePixelValue(sizeValue, 0);
     applyAdjustSizeLimit(styleProp, initialValue, { commit, sync });
     return;
   }
 
+  const targetMode = normalizeAdjustSizeInputMode(rawMode, "fixed");
   setStoredAdjustSizeInputMode(state.adjustTarget, normalizedProp, targetMode);
 
   if (targetMode === "fixed") {

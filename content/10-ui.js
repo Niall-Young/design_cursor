@@ -386,27 +386,25 @@ function ensureAdjustPopover() {
       </div>
       <div class="chat-context-picker-adjust-size-limit-stack" data-adjust-size-limit-stack hidden>
         <div class="chat-context-picker-adjust-size-limit-row" data-adjust-size-limit-row="max" hidden>
-          <div class="chat-context-picker-adjust-size-limit-label">最大值</div>
           <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="maxWidth">
-            <span class="chat-context-picker-adjust-input-prefix">W</span>
+            <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("chevronsLeftRight")}</span>
             <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
             <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="maxWidth" aria-label="最大宽度" title="最大宽度，清空表示不设置" />
           </label>
           <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="maxHeight">
-            <span class="chat-context-picker-adjust-input-prefix">H</span>
+            <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("chevronsUpDown")}</span>
             <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
             <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="maxHeight" aria-label="最大高度" title="最大高度，清空表示不设置" />
           </label>
         </div>
         <div class="chat-context-picker-adjust-size-limit-row" data-adjust-size-limit-row="min" hidden>
-          <div class="chat-context-picker-adjust-size-limit-label">最小值</div>
           <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="minWidth">
-            <span class="chat-context-picker-adjust-input-prefix">W</span>
+            <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("chevronsRightLeft")}</span>
             <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
             <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="minWidth" aria-label="最小宽度" title="最小宽度，清空表示不设置" />
           </label>
           <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="minHeight">
-            <span class="chat-context-picker-adjust-input-prefix">H</span>
+            <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("chevronsDownUp")}</span>
             <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
             <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="minHeight" aria-label="最小高度" title="最小高度，清空表示不设置" />
           </label>
