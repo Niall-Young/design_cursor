@@ -742,8 +742,23 @@ function getTextNodeClientRects(textNode) {
   return rects;
 }
 
+function shouldUseTextAdjustmentBox(target) {
+  if (target?.kind !== "text") {
+    return false;
+  }
+
+  return state.selectionMode === "adjust" || (state.adjustTarget && getTargetNode(state.adjustTarget) === getTargetNode(target));
+}
+
 function getTargetClientRects(target) {
   if (target.kind === "text") {
+    if (shouldUseTextAdjustmentBox(target)) {
+      const element = getTargetElement(target);
+      const rect = element?.getBoundingClientRect?.();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        return [rect];
+      }
+    }
     return getTextNodeClientRects(target.node);
   }
 

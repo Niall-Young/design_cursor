@@ -90,30 +90,6 @@ function enableSingleClickSelectAll(container) {
   );
 }
 
-function openNativeColorPicker(input) {
-  if (!(input instanceof HTMLInputElement) || input.type !== "color" || input.disabled) {
-    return false;
-  }
-
-  try {
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return true;
-    }
-  } catch (_) {
-    // Fall through to click-based fallback for browsers that reject showPicker.
-  }
-
-  try {
-    input.focus({ preventScroll: true });
-  } catch (_) {
-    input.focus();
-  }
-
-  input.click();
-  return true;
-}
-
 function ensureToolbar() {
   if (state.toolbar) {
     return;
@@ -359,20 +335,10 @@ function ensureAdjustPopover() {
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="100" max="900" step="100" data-chat-context-picker-numeric="true" data-adjust-input="fontWeight" aria-label="字重" title="字重" />
         </label>
         <label class="chat-context-picker-adjust-input-row">
-          <span class="chat-context-picker-adjust-input-prefix chat-context-picker-adjust-input-prefix-wide">LH</span>
+          <span class="chat-context-picker-adjust-input-prefix">H</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-input="lineHeight" aria-label="行高" title="行高" />
         </label>
-        <div class="chat-context-picker-adjust-style-row chat-context-picker-adjust-text-color-row" data-adjust-row="text-color">
-          <span class="chat-context-picker-adjust-fill-prefix">
-            <button class="chat-context-picker-adjust-swatch-button" type="button" data-action="open-text-color-picker" aria-label="选择文字颜色" title="选择文字颜色">
-              <span class="chat-context-picker-adjust-swatch" data-adjust-swatch="textColor"></span>
-              <input class="chat-context-picker-adjust-native-color" type="color" data-adjust-input="textColor" />
-            </button>
-          </span>
-          <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
-          <input class="chat-context-picker-adjust-style-input" type="text" data-adjust-text="textColor" spellcheck="false" aria-label="文字颜色" title="文字颜色" />
-        </div>
       </div>
       <div class="chat-context-picker-adjust-segmented" data-control-group="text-align">
         <button class="chat-context-picker-adjust-segment chat-context-picker-adjust-segment-icon" type="button" data-adjust-prop="textAlign" data-adjust-value="left" aria-label="左对齐" title="左对齐">
@@ -389,7 +355,7 @@ function ensureAdjustPopover() {
     <div class="chat-context-picker-adjust-divider" data-adjust-divider="text" hidden></div>
     <div class="chat-context-picker-adjust-section" data-adjust-section="layout">
       <div class="chat-context-picker-adjust-section-title">布局</div>
-      <div class="chat-context-picker-adjust-segmented" data-control-group="layout-direction">
+      <div class="chat-context-picker-adjust-segmented" data-control-group="layout-direction" data-adjust-layout-advanced="direction">
         <button class="chat-context-picker-adjust-segment chat-context-picker-adjust-segment-icon" type="button" data-adjust-prop="layoutDirection" data-adjust-value="none" aria-label="关闭自动布局" title="关闭自动布局">
           <span class="chat-context-picker-adjust-segment-glyph">${icon("layoutAutoNone")}</span>
         </button>
@@ -418,7 +384,35 @@ function ensureAdjustPopover() {
           </button>
         </label>
       </div>
-      <div class="chat-context-picker-adjust-layout-row">
+      <div class="chat-context-picker-adjust-size-limit-stack" data-adjust-size-limit-stack hidden>
+        <div class="chat-context-picker-adjust-size-limit-row" data-adjust-size-limit-row="max" hidden>
+          <div class="chat-context-picker-adjust-size-limit-label">最大值</div>
+          <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="maxWidth">
+            <span class="chat-context-picker-adjust-input-prefix">W</span>
+            <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
+            <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="maxWidth" aria-label="最大宽度" title="最大宽度，清空表示不设置" />
+          </label>
+          <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="maxHeight">
+            <span class="chat-context-picker-adjust-input-prefix">H</span>
+            <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
+            <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="maxHeight" aria-label="最大高度" title="最大高度，清空表示不设置" />
+          </label>
+        </div>
+        <div class="chat-context-picker-adjust-size-limit-row" data-adjust-size-limit-row="min" hidden>
+          <div class="chat-context-picker-adjust-size-limit-label">最小值</div>
+          <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="minWidth">
+            <span class="chat-context-picker-adjust-input-prefix">W</span>
+            <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
+            <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="minWidth" aria-label="最小宽度" title="最小宽度，清空表示不设置" />
+          </label>
+          <label class="chat-context-picker-adjust-input-row" data-adjust-size-limit-field="minHeight">
+            <span class="chat-context-picker-adjust-input-prefix">H</span>
+            <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
+            <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" step="1" data-chat-context-picker-numeric="true" data-adjust-size-limit-input="minHeight" aria-label="最小高度" title="最小高度，清空表示不设置" />
+          </label>
+        </div>
+      </div>
+      <div class="chat-context-picker-adjust-layout-row" data-adjust-layout-advanced="alignment">
         <div class="chat-context-picker-adjust-align-grid" data-control-group="alignment-grid">
           <button class="chat-context-picker-adjust-align-cell" type="button" data-adjust-horizontal="left" data-adjust-vertical="top" aria-label="左上对齐" title="左上对齐"><span class="chat-context-picker-adjust-align-dot"></span></button>
           <button class="chat-context-picker-adjust-align-cell" type="button" data-adjust-horizontal="center" data-adjust-vertical="top" aria-label="上方居中" title="上方居中"><span class="chat-context-picker-adjust-align-dot"></span></button>
@@ -442,7 +436,7 @@ function ensureAdjustPopover() {
     </div>
     <div class="chat-context-picker-adjust-divider" data-adjust-divider="layout"></div>
     <div class="chat-context-picker-adjust-section" data-adjust-section="padding">
-      <div class="chat-context-picker-adjust-section-title">内边距</div>
+      <div class="chat-context-picker-adjust-section-title" data-adjust-padding-title>内边距</div>
       <div class="chat-context-picker-adjust-grid chat-context-picker-adjust-grid-tight">
         <label class="chat-context-picker-adjust-input-row">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("padLeft")}</span>
@@ -470,12 +464,12 @@ function ensureAdjustPopover() {
     <div class="chat-context-picker-adjust-section">
       <div class="chat-context-picker-adjust-section-title">外观</div>
       <div class="chat-context-picker-adjust-grid chat-context-picker-adjust-grid-tight">
-        <label class="chat-context-picker-adjust-input-row">
+        <label class="chat-context-picker-adjust-input-row" data-adjust-appearance-row="opacity">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("opacity")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" max="100" step="1" data-chat-context-picker-numeric="true" data-adjust-input="opacity" />
         </label>
-        <label class="chat-context-picker-adjust-input-row">
+        <label class="chat-context-picker-adjust-input-row" data-adjust-appearance-row="border-radius">
           <span class="chat-context-picker-adjust-input-icon" aria-hidden="true">${icon("borderRadius")}</span>
           <span class="chat-context-picker-adjust-input-divider" aria-hidden="true"></span>
           <input class="chat-context-picker-adjust-inline-input" type="text" inputmode="decimal" min="0" max="999" step="1" data-chat-context-picker-numeric="true" data-adjust-input="borderRadius" />
@@ -612,6 +606,7 @@ function ensureAdjustPopover() {
     }
 
     if (action === "open-size-menu") {
+      event.preventDefault();
       const sizeProp = actionTarget.dataset.sizeProp === "height" ? "height" : "width";
       if (state.sizeMenu?.dataset.open === "true" && state.sizeMenuProp === sizeProp) {
         closeSizeMenu();
@@ -622,6 +617,7 @@ function ensureAdjustPopover() {
     }
 
     if (action === "open-gap-menu") {
+      event.preventDefault();
       if (state.gapMenu?.dataset.open === "true") {
         closeGapMenu();
         return;
@@ -631,6 +627,10 @@ function ensureAdjustPopover() {
     }
 
     if (action === "open-fill-picker") {
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        openFillPopover(actionTarget.getBoundingClientRect(), { source: "text" });
+        return;
+      }
       const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
       if (persistedTarget) {
         persistedTarget.adjustFillEnabled = true;
@@ -649,12 +649,6 @@ function ensureAdjustPopover() {
       return;
     }
 
-    if (action === "open-text-color-picker") {
-      const colorInput = actionTarget.querySelector('input[type="color"]');
-      openNativeColorPicker(colorInput);
-      return;
-    }
-
     if (action === "open-fill-overlay-picker") {
       const index = Number.parseInt(actionTarget.dataset.overlayIndex || "-1", 10);
       if (index >= 0) {
@@ -667,6 +661,10 @@ function ensureAdjustPopover() {
       const anchorRect = actionTarget.getBoundingClientRect();
       const persistedTarget = ensureAdjustLayerState(state.adjustTarget);
       if (!persistedTarget) {
+        return;
+      }
+      if (isTextAdjustTarget(persistedTarget)) {
+        openFillPopover(anchorRect, { source: "text" });
         return;
       }
       if (isSvgResourceTarget(persistedTarget)) {
@@ -722,6 +720,10 @@ function ensureAdjustPopover() {
     }
 
     if (action === "clear-fill") {
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        clearAdjustTextColor();
+        return;
+      }
       clearBackgroundFill();
       return;
     }
@@ -892,6 +894,10 @@ function ensureAdjustPopover() {
     }
 
     if (input.dataset.adjustInput === "backgroundColor") {
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        updateAdjustTextColorValue({ hex: input.value, commit: false, sync: false });
+        return;
+      }
       updateAdjustFillColorValue({ hex: input.value, commit: false, sync: false });
       return;
     }
@@ -914,6 +920,10 @@ function ensureAdjustPopover() {
       }
       if (state.adjustControls.backgroundColorInput) {
         state.adjustControls.backgroundColorInput.value = parsed.hex;
+      }
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        updateAdjustTextColorValue({ hex: parsed.hex, alpha: parsed.alpha * 100, commit: false, sync: false });
+        return;
       }
       updateAdjustFillColorValue({ hex: parsed.hex, alpha: parsed.alpha * 100, commit: false, sync: false });
       return;
@@ -948,6 +958,10 @@ function ensureAdjustPopover() {
     }
 
     if (input.dataset.adjustAlpha === "backgroundColor") {
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        updateAdjustTextColorValue({ alpha: input.value, commit: false, sync: false });
+        return;
+      }
       updateAdjustFillColorValue({ alpha: input.value, commit: false, sync: false });
       return;
     }
@@ -957,6 +971,11 @@ function ensureAdjustPopover() {
       if (index >= 0) {
         updateAdjustFillColorValue({ overlayIndex: index, alpha: input.value, commit: false, sync: false });
       }
+      return;
+    }
+
+    if (input.dataset.adjustSizeLimitInput) {
+      applyAdjustSizeLimit(input.dataset.adjustSizeLimitInput, input.value, { commit: false, sync: true });
       return;
     }
 
@@ -982,6 +1001,10 @@ function ensureAdjustPopover() {
     }
 
     if (input.dataset.adjustInput === "backgroundColor") {
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        updateAdjustTextColorValue({ hex: input.value, commit: true });
+        return;
+      }
       updateAdjustFillColorValue({ hex: input.value, commit: true });
       return;
     }
@@ -996,12 +1019,20 @@ function ensureAdjustPopover() {
 
     if (input.dataset.adjustText === "backgroundColor") {
       if (!input.value.trim()) {
+        if (isTextAdjustTarget(state.adjustTarget)) {
+          clearAdjustTextColor();
+          return;
+        }
         clearBackgroundFill();
         return;
       }
       const parsed = parseAdjustColorInputValue(input.value);
       if (parsed) {
         input.value = formatAdjustColorHexValue(parsed.css);
+        if (isTextAdjustTarget(state.adjustTarget)) {
+          updateAdjustTextColorValue({ hex: parsed.hex, alpha: parsed.alpha * 100, commit: true });
+          return;
+        }
         updateAdjustFillColorValue({ hex: parsed.hex, alpha: parsed.alpha * 100, commit: true });
       }
       return;
@@ -1032,6 +1063,10 @@ function ensureAdjustPopover() {
 
     if (input.dataset.adjustAlpha === "backgroundColor") {
       input.value = String(clampNumber(input.value, 0, 100, 100));
+      if (isTextAdjustTarget(state.adjustTarget)) {
+        updateAdjustTextColorValue({ alpha: input.value, commit: true });
+        return;
+      }
       updateAdjustFillColorValue({ alpha: input.value, commit: true });
       return;
     }
@@ -1042,6 +1077,11 @@ function ensureAdjustPopover() {
         input.value = String(clampNumber(input.value, 0, 100, 100));
         updateAdjustFillColorValue({ overlayIndex: index, alpha: input.value, commit: true });
       }
+      return;
+    }
+
+    if (input.dataset.adjustSizeLimitInput) {
+      applyAdjustSizeLimit(input.dataset.adjustSizeLimitInput, input.value, { commit: true, sync: true });
       return;
     }
 
@@ -1066,8 +1106,13 @@ function ensureAdjustPopover() {
     textDivider: popover.querySelector('[data-adjust-divider="text"]'),
     layoutSection: popover.querySelector('[data-adjust-section="layout"]'),
     layoutDivider: popover.querySelector('[data-adjust-divider="layout"]'),
+    layoutDirectionGroup: popover.querySelector('[data-adjust-layout-advanced="direction"]'),
+    layoutAdvancedRow: popover.querySelector('[data-adjust-layout-advanced="alignment"]'),
     paddingSection: popover.querySelector('[data-adjust-section="padding"]'),
     paddingDivider: popover.querySelector('[data-adjust-divider="padding"]'),
+    paddingTitle: popover.querySelector('[data-adjust-padding-title]'),
+    opacityRow: popover.querySelector('[data-adjust-appearance-row="opacity"]'),
+    borderRadiusRow: popover.querySelector('[data-adjust-appearance-row="border-radius"]'),
     resourceActions: popover.querySelector('[data-adjust-resource-actions]'),
     resourceDownloadButton: popover.querySelector('[data-action="download-resource"]'),
     fillStack: popover.querySelector('[data-adjust-stack="fill"]'),
@@ -1087,6 +1132,13 @@ function ensureAdjustPopover() {
     width: popover.querySelector('[data-adjust-input="width"]'),
     heightRow: popover.querySelector('[data-adjust-size-row="height"]'),
     height: popover.querySelector('[data-adjust-input="height"]'),
+    sizeLimitStack: popover.querySelector('[data-adjust-size-limit-stack]'),
+    maxLimitRow: popover.querySelector('[data-adjust-size-limit-row="max"]'),
+    minLimitRow: popover.querySelector('[data-adjust-size-limit-row="min"]'),
+    maxWidth: popover.querySelector('[data-adjust-size-limit-input="maxWidth"]'),
+    maxHeight: popover.querySelector('[data-adjust-size-limit-input="maxHeight"]'),
+    minWidth: popover.querySelector('[data-adjust-size-limit-input="minWidth"]'),
+    minHeight: popover.querySelector('[data-adjust-size-limit-input="minHeight"]'),
     gapRow: popover.querySelector('[data-adjust-gap-row="true"]'),
     borderRadius: popover.querySelector('[data-adjust-input="borderRadius"]'),
     opacity: popover.querySelector('[data-adjust-input="opacity"]'),
@@ -1126,18 +1178,48 @@ function ensureSizeMenu() {
       <span class="chat-context-picker-size-menu-item-label">Fill</span>
       <span class="chat-context-picker-size-menu-item-meta">填满</span>
     </button>
+    <div class="chat-context-picker-size-menu-divider" aria-hidden="true"></div>
+    <button class="chat-context-picker-size-menu-item" type="button" data-action="select-size-mode" data-size-mode="max">
+      <span class="chat-context-picker-size-menu-item-label">最大值</span>
+      <span class="chat-context-picker-size-menu-item-meta">上限</span>
+    </button>
+    <button class="chat-context-picker-size-menu-item" type="button" data-action="select-size-mode" data-size-mode="min">
+      <span class="chat-context-picker-size-menu-item-label">最小值</span>
+      <span class="chat-context-picker-size-menu-item-meta">下限</span>
+    </button>
   `;
+
+  let lastPointerSelectionAt = 0;
+  const selectSizeMenuMode = (actionTarget) => {
+    if (actionTarget?.dataset.action !== "select-size-mode") {
+      return false;
+    }
+    applyAdjustSizeMode(state.sizeMenuProp, actionTarget.dataset.sizeMode, { commit: true });
+    closeSizeMenu();
+    return true;
+  };
+
+  menu.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    if (event.button !== 0) {
+      return;
+    }
+    const actionTarget = event.target?.closest?.("[data-action]");
+    if (selectSizeMenuMode(actionTarget)) {
+      event.preventDefault();
+      lastPointerSelectionAt = Date.now();
+    }
+  });
 
   menu.addEventListener("click", (event) => {
     event.stopPropagation();
-    const actionTarget = event.target?.closest?.("[data-action]");
-    if (!actionTarget) {
+    if (Date.now() - lastPointerSelectionAt < 500) {
+      event.preventDefault();
       return;
     }
-
-    if (actionTarget.dataset.action === "select-size-mode") {
-      applyAdjustSizeMode(state.sizeMenuProp, actionTarget.dataset.sizeMode, { commit: true });
-      closeSizeMenu();
+    const actionTarget = event.target?.closest?.("[data-action]");
+    if (selectSizeMenuMode(actionTarget)) {
+      event.preventDefault();
     }
   });
 
