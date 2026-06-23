@@ -302,6 +302,7 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   gap: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   pointer-events: none;
+  color-scheme: light dark;
 }
 
 #chat-context-picker-toolbar[data-hidden="true"] {
@@ -2911,6 +2912,304 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 .chat-context-picker-popover-actions,
 .chat-context-picker-adjust-divider {
   margin-top: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  #chat-context-picker-toolbar {
+    --chat-toolbar-bg: rgba(11, 13, 18, 0.96);
+    --chat-toolbar-border: rgba(255, 255, 255, 0.14);
+    --chat-text: #f8fafc;
+    --chat-text-muted: rgba(248, 250, 252, 0.72);
+    --chat-line: rgba(255, 255, 255, 0.1);
+  }
+
+  .chat-context-picker-prompt-popover,
+  .chat-context-picker-adjust-popover,
+  .chat-context-picker-size-menu,
+  .chat-context-picker-gap-menu,
+  .chat-context-picker-shadow-popover,
+  .chat-context-picker-fill-popover,
+  .chat-context-picker-fill-format-menu,
+  .chat-context-picker-popover {
+    --chat-context-picker-swatch-border: #333a47;
+    color-scheme: dark;
+    color: #f4f7fb;
+    background: #171a21;
+    border-color: #333a47;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  }
+
+  .chat-context-picker-prompt-input-shell,
+  .chat-context-picker-fill-angle-field,
+  .chat-context-picker-fill-format-trigger,
+  .chat-context-picker-fill-value-input,
+  .chat-context-picker-fill-triplet-field,
+  .chat-context-picker-fill-alpha-field,
+  .chat-context-picker-adjust-input-row,
+  .chat-context-picker-adjust-style-row,
+  .chat-context-picker-adjust-fill-row,
+  .chat-context-picker-adjust-textarea-row,
+  .chat-context-picker-shadow-input-row,
+  .chat-context-picker-shadow-color-row,
+  .chat-context-picker-fill-color-row,
+  .chat-context-picker-adjust-align-grid,
+  .chat-context-picker-empty-state,
+  .chat-context-picker-item {
+    background: #1f2530;
+    border-color: #333a47;
+  }
+
+  .chat-context-picker-prompt-title,
+  .chat-context-picker-adjust-title,
+  .chat-context-picker-shadow-title,
+  .chat-context-picker-fill-title,
+  .chat-context-picker-popover-title,
+  .chat-context-picker-adjust-section-title,
+  .chat-context-picker-prompt-input,
+  .chat-context-picker-fill-angle-input,
+  .chat-context-picker-fill-value-input,
+  .chat-context-picker-fill-alpha-input,
+  .chat-context-picker-fill-format-trigger,
+  .chat-context-picker-fill-triplet-input,
+  .chat-context-picker-fill-format-option,
+  .chat-context-picker-adjust-inline-input,
+  .chat-context-picker-adjust-style-input,
+  .chat-context-picker-adjust-textarea,
+  .chat-context-picker-shadow-input,
+  .chat-context-picker-shadow-text-input,
+  .chat-context-picker-shadow-percent-input,
+  .chat-context-picker-fill-text-input,
+  .chat-context-picker-fill-percent-input,
+  .chat-context-picker-shadow-percent-label,
+  .chat-context-picker-fill-percent-label,
+  .chat-context-picker-adjust-style-label,
+  .chat-context-picker-size-menu-item,
+  .chat-context-picker-gap-menu-item,
+  .chat-context-picker-item-label {
+    color: #f4f7fb;
+  }
+
+  .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-style-input {
+    color: #f4f7fb;
+  }
+
+  .chat-context-picker-prompt-chip,
+  .chat-context-picker-fill-segment,
+  .chat-context-picker-fill-angle-label,
+  .chat-context-picker-fill-alpha-label,
+  .chat-context-picker-fill-action,
+  .chat-context-picker-fill-tool-button,
+  .chat-context-picker-association-label,
+  .chat-context-picker-adjust-section-action,
+  .chat-context-picker-adjust-row-action,
+  .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-row-action,
+  .chat-context-picker-adjust-segment,
+  .chat-context-picker-shadow-segment,
+  .chat-context-picker-adjust-input-prefix,
+  .chat-context-picker-adjust-input-icon,
+  .chat-context-picker-shadow-input-prefix,
+  .chat-context-picker-shadow-input-icon,
+  .chat-context-picker-adjust-style-alpha-input,
+  .chat-context-picker-adjust-style-alpha-label,
+  .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-style-alpha-label,
+  .chat-context-picker-adjust-input-row[data-size-mode="hug"] .chat-context-picker-adjust-inline-input,
+  .chat-context-picker-adjust-input-row[data-size-mode="fill"] .chat-context-picker-adjust-inline-input,
+  .chat-context-picker-adjust-input-row[data-gap-mode="auto"] .chat-context-picker-adjust-inline-input,
+  .chat-context-picker-adjust-input-row[data-gap-mode="special"] .chat-context-picker-adjust-inline-input,
+  .chat-context-picker-size-menu-item-meta,
+  .chat-context-picker-gap-menu-item-meta,
+  .chat-context-picker-popover-count,
+  .chat-context-picker-item-change-summary,
+  .chat-context-picker-action-button-secondary {
+    color: #c3cad6;
+  }
+
+  .chat-context-picker-prompt-close,
+  .chat-context-picker-adjust-close,
+  .chat-context-picker-shadow-close,
+  .chat-context-picker-fill-close,
+  .chat-context-picker-popover-close,
+  .chat-context-picker-item-icon-button,
+  .chat-context-picker-empty-icon,
+  .chat-context-picker-empty-copy,
+  .chat-context-picker-item-meta,
+  .chat-context-picker-adjust-input-suffix,
+  .chat-context-picker-adjust-style-row[data-state="inactive"],
+  .chat-context-picker-adjust-style-row[data-state="inactive"] .chat-context-picker-adjust-style-label,
+  .chat-context-picker-adjust-style-row[data-state="inactive"] .chat-context-picker-adjust-style-input {
+    color: #8b95a5;
+  }
+
+  .chat-context-picker-prompt-input::placeholder,
+  .chat-context-picker-adjust-textarea::placeholder,
+  .chat-context-picker-adjust-style-input::placeholder {
+    color: #687383;
+  }
+
+  .chat-context-picker-prompt-divider,
+  .chat-context-picker-adjust-fill-row .chat-context-picker-adjust-row-action:hover {
+    color: #9aa4b2;
+  }
+
+  .chat-context-picker-prompt-divider::before,
+  .chat-context-picker-prompt-divider::after,
+  .chat-context-picker-fill-angle-divider,
+  .chat-context-picker-fill-triplet-divider,
+  .chat-context-picker-adjust-divider,
+  .chat-context-picker-adjust-input-divider,
+  .chat-context-picker-shadow-input-divider,
+  .chat-context-picker-fill-input-divider,
+  .chat-context-picker-size-menu-divider {
+    background-color: #333a47;
+    border-color: #333a47;
+  }
+
+  .chat-context-picker-adjust-resource-actions {
+    border-top-color: #333a47;
+  }
+
+  .chat-context-picker-prompt-chip,
+  .chat-context-picker-fill-segmented,
+  .chat-context-picker-adjust-segmented,
+  .chat-context-picker-shadow-segmented,
+  .chat-context-picker-popover-count,
+  .chat-context-picker-action-button-secondary {
+    background: #252b36;
+  }
+
+  .chat-context-picker-prompt-close:hover,
+  .chat-context-picker-adjust-close:hover,
+  .chat-context-picker-shadow-close:hover,
+  .chat-context-picker-fill-close:hover,
+  .chat-context-picker-popover-close:hover,
+  .chat-context-picker-item-icon-button:hover,
+  .chat-context-picker-fill-segment:hover,
+  .chat-context-picker-fill-format-option:hover,
+  .chat-context-picker-fill-format-trigger:hover,
+  .chat-context-picker-fill-action:hover,
+  .chat-context-picker-fill-tool-button:hover,
+  .chat-context-picker-adjust-section-action:hover,
+  .chat-context-picker-adjust-row-action:hover,
+  .chat-context-picker-adjust-input-suffix-button:hover,
+  .chat-context-picker-size-menu-item:hover,
+  .chat-context-picker-gap-menu-item:hover,
+  .chat-context-picker-adjust-input-row:hover,
+  .chat-context-picker-adjust-textarea-row:hover,
+  .chat-context-picker-adjust-style-row:hover,
+  .chat-context-picker-adjust-align-cell:hover,
+  .chat-context-picker-adjust-segment:hover,
+  .chat-context-picker-shadow-input-row:hover,
+  .chat-context-picker-shadow-color-row:hover,
+  .chat-context-picker-fill-color-row:hover,
+  .chat-context-picker-shadow-segment:hover,
+  .chat-context-picker-action-button-secondary:hover:not(:disabled) {
+    background: #2c3340;
+    color: #f4f7fb;
+  }
+
+  .chat-context-picker-fill-segment[data-state="active"],
+  .chat-context-picker-adjust-segment[data-state="active"],
+  .chat-context-picker-shadow-segment[data-state="active"],
+  .chat-context-picker-adjust-align-cell[data-state="active"]:hover,
+  .chat-context-picker-adjust-segment[data-state="active"]:hover,
+  .chat-context-picker-shadow-segment[data-state="active"]:hover {
+    background: #343c4a;
+    color: #f8fafc;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .chat-context-picker-fill-format-option[data-state="active"],
+  .chat-context-picker-adjust-input-suffix-button[data-state="active"],
+  .chat-context-picker-size-menu-item[data-state="active"],
+  .chat-context-picker-gap-menu-item[data-state="active"],
+  .chat-context-picker-adjust-style-row[data-selected="true"] {
+    background: rgba(68, 114, 255, 0.18);
+  }
+
+  .chat-context-picker-adjust-style-row[data-selected="true"]:hover {
+    background: rgba(68, 114, 255, 0.24);
+  }
+
+  .chat-context-picker-adjust-style-row[data-visible="false"] {
+    opacity: 1;
+  }
+
+  .chat-context-picker-adjust-style-row[data-visible="false"] .chat-context-picker-adjust-style-input,
+  .chat-context-picker-adjust-style-row[data-visible="false"] .chat-context-picker-adjust-style-alpha-input,
+  .chat-context-picker-adjust-style-row[data-visible="false"] .chat-context-picker-adjust-style-alpha-label {
+    color: #aeb7c5;
+  }
+
+  .chat-context-picker-association-switch {
+    background: #252b36;
+    border-color: #485162;
+  }
+
+  .chat-context-picker-association-switch-thumb,
+  .chat-context-picker-count-badge {
+    background: #f8fafc;
+    color: #111827;
+  }
+
+  .chat-context-picker-action-button-primary {
+    background: #f8fafc;
+    color: #111827;
+  }
+
+  .chat-context-picker-action-button-primary:hover:not(:disabled) {
+    background: #ffffff;
+  }
+
+  .chat-context-picker-list {
+    scrollbar-color: #596273 transparent;
+  }
+
+  .chat-context-picker-list::-webkit-scrollbar-thumb,
+  .chat-context-picker-adjust-body::-webkit-scrollbar-thumb {
+    background: #596273;
+  }
+
+  .chat-context-picker-list::-webkit-scrollbar-thumb:hover {
+    background: #707b8e;
+  }
+
+  .chat-context-picker-fill-gradient-strip-track,
+  .chat-context-picker-fill-slider-track-alpha,
+  .chat-context-picker-adjust-swatch::before,
+  .chat-context-picker-shadow-swatch::before,
+  .chat-context-picker-fill-swatch::before {
+    background-color: #1f2530;
+    background-image:
+      var(--chat-fill-gradient-preview, var(--chat-fill-alpha-gradient, linear-gradient(90deg, transparent 0%, transparent 100%))),
+      linear-gradient(45deg, #4b5563 25%, transparent 25%, transparent 75%, #4b5563 75%, #4b5563),
+      linear-gradient(45deg, #4b5563 25%, transparent 25%, transparent 75%, #4b5563 75%, #4b5563);
+  }
+
+  .chat-context-picker-adjust-swatch::before,
+  .chat-context-picker-shadow-swatch::before,
+  .chat-context-picker-fill-swatch::before {
+    background-image:
+      linear-gradient(45deg, #4b5563 25%, transparent 25%, transparent 75%, #4b5563 75%, #4b5563),
+      linear-gradient(45deg, #4b5563 25%, transparent 25%, transparent 75%, #4b5563 75%, #4b5563);
+  }
+
+  .chat-context-picker-fill-sv-panel {
+    border-color: #333a47;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .chat-context-picker-adjust-align-dot {
+    background: #5b6472;
+  }
+
+  .chat-context-picker-adjust-swatch[data-empty="true"] {
+    background: linear-gradient(135deg, #252b36 0%, #171a21 100%);
+  }
+
+  .chat-context-picker-adjust-shadow-preview {
+    background: #252b36;
+    border-color: #4b5563;
+  }
 }
 
 @media (max-width: 520px) {

@@ -4845,7 +4845,9 @@ function syncAdjustPopoverFromTarget(target) {
       "--swatch-color",
       baseFillEnabled ? baseFillSwatch : "transparent"
     );
-    state.adjustControls.backgroundColorSwatch.style.borderColor = baseFillEnabled ? "transparent" : "#ebebeb";
+    state.adjustControls.backgroundColorSwatch.style.borderColor = baseFillEnabled
+      ? "transparent"
+      : "var(--chat-context-picker-swatch-border, #ebebeb)";
   }
   if (state.adjustControls.textContent && document.activeElement !== state.adjustControls.textContent) {
     state.adjustControls.textContent.value = values.textContent;
