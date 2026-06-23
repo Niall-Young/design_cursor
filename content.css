@@ -3126,6 +3126,10 @@ input[data-chat-context-picker-number-drag-ready="true"] {
     background: rgba(68, 114, 255, 0.18);
   }
 
+  .chat-context-picker-fill-format-option[data-state="active"] {
+    color: #f8fafc;
+  }
+
   .chat-context-picker-adjust-style-row[data-selected="true"]:hover {
     background: rgba(68, 114, 255, 0.24);
   }
