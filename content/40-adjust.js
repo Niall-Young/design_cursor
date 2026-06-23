@@ -330,11 +330,7 @@ function parseAdjustColor(value) {
 
   const rawValue = String(value).trim();
   const normalizedValue = rawValue.replace(/\s+/g, "").toLowerCase();
-  if (
-    normalizedValue === "transparent" ||
-    normalizedValue === "rgba(0,0,0,0)" ||
-    normalizedValue === "rgb(0,0,0,0)"
-  ) {
+  if (normalizedValue === "transparent" || normalizedValue === "none") {
     return null;
   }
 
@@ -358,9 +354,6 @@ function parseAdjustColor(value) {
     .map((item) => Number.parseInt(item, 10).toString(16).padStart(2, "0"))
     .join("")}`;
   const alpha = clampAlpha(match[4], 1);
-  if (alpha <= 0) {
-    return null;
-  }
   const css = alpha >= 1 ? hex : `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${alpha})`;
 
   return {
@@ -369,6 +362,15 @@ function parseAdjustColor(value) {
     alpha,
     label: `${hex.replace(/^#/, "").toUpperCase()} ${formatAlphaPercent(alpha)}`
   };
+}
+
+function isDefaultTransparentPaint(value) {
+  const normalizedValue = String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+  return (
+    normalizedValue === "transparent" ||
+    normalizedValue === "rgba(0,0,0,0)" ||
+    normalizedValue === "rgb(0,0,0,0)"
+  );
 }
 
 function parseAdjustColorInputValue(value) {
@@ -2160,7 +2162,9 @@ function getAdjustFillInfo(styles, element = null) {
   }
 
   const backgroundImage = styles.backgroundImage && styles.backgroundImage !== "none" ? styles.backgroundImage : "";
-  const parsedColor = parseAdjustColor(styles.backgroundColor);
+  const parsedColor = isDefaultTransparentPaint(styles.backgroundColor)
+    ? null
+    : parseAdjustColor(styles.backgroundColor);
   const backgroundColor = parsedColor?.hex || "";
   const backgroundColorCss = parsedColor?.css || "";
   const isGradient = /gradient/i.test(backgroundImage);
