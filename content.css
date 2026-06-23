@@ -565,7 +565,10 @@ input[data-chat-context-picker-number-drag-ready="true"] {
 .chat-context-picker-fill-popover {
   width: min(280px, calc(100vw - 20px));
   gap: 8px;
-  overflow: visible;
+  max-height: calc(100vh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .chat-context-picker-fill-body {
@@ -2307,12 +2310,18 @@ input[data-chat-context-picker-number-drag-ready="true"] {
   width: 8px;
 }
 
-.chat-context-picker-adjust-body::-webkit-scrollbar-thumb {
+.chat-context-picker-fill-popover::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-context-picker-adjust-body::-webkit-scrollbar-thumb,
+.chat-context-picker-fill-popover::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 999px;
 }
 
-.chat-context-picker-adjust-body::-webkit-scrollbar-track {
+.chat-context-picker-adjust-body::-webkit-scrollbar-track,
+.chat-context-picker-fill-popover::-webkit-scrollbar-track {
   background: transparent;
 }
 

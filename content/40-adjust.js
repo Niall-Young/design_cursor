@@ -3426,6 +3426,7 @@ function renderFillPopoverControls() {
     }
   }
 
+  scheduleFillPopoverPosition();
 }
 
 async function pickFillPopoverScreenColor() {
@@ -4117,10 +4118,13 @@ function positionFillPopover(anchorRect) {
     return;
   }
 
+  const viewportPadding = 16;
+  const maxHeight = Math.max(160, window.innerHeight - viewportPadding * 2);
+  state.fillPopover.style.maxHeight = `${maxHeight}px`;
+
   const measuredRect = state.fillPopover.getBoundingClientRect();
   const popoverWidth = Math.min(Math.ceil(measuredRect.width || state.fillPopover.offsetWidth || 280), window.innerWidth - 32);
-  const popoverHeight = Math.min(Math.ceil(measuredRect.height || state.fillPopover.offsetHeight || 454), window.innerHeight - 32);
-  const viewportPadding = 16;
+  const popoverHeight = Math.min(Math.ceil(measuredRect.height || state.fillPopover.offsetHeight || 454), maxHeight);
   const anchorGap = 12;
   let left = anchorRect.right + anchorGap;
   let top = anchorRect.top;
@@ -4134,6 +4138,20 @@ function positionFillPopover(anchorRect) {
 
   state.fillPopover.style.left = `${left}px`;
   state.fillPopover.style.top = `${top}px`;
+}
+
+function scheduleFillPopoverPosition() {
+  if (!state.fillPopover || state.fillPopover.dataset.open !== "true") {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    if (!state.fillPopover || state.fillPopover.dataset.open !== "true") {
+      return;
+    }
+    state.fillPopoverAnchorRect = getFillPopoverAnchorRect();
+    positionFillPopover(state.fillPopoverAnchorRect);
+  });
 }
 
 function getFillPopoverAnchorRect() {
