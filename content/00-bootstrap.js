@@ -1,6 +1,6 @@
 // Bootstrap shared state plus the icon and mode registries used across the picker.
 window.__chatContextPickerLoaded = true;
-window.__chatContextPickerVersion = "2.0.2-no-hover-mirror";
+window.__chatContextPickerVersion = "2.2.2";
 
 const state = {
   active: false,
