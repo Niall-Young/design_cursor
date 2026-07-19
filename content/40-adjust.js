@@ -2790,8 +2790,36 @@ function setAdjustPromptBaselines(target) {
     return;
   }
 
+  if (
+    isTextAdjustTarget(persistedTarget) &&
+    !Object.prototype.hasOwnProperty.call(persistedTarget, "adjustTextPromptBaseline")
+  ) {
+    persistedTarget.adjustTextPromptBaseline = getAdjustTextContent(persistedTarget);
+  }
   persistedTarget.adjustFillPromptBaseline = captureAdjustFillPromptState(persistedTarget);
   persistedTarget.adjustShadowPromptBaseline = captureAdjustShadowPromptState(persistedTarget);
+}
+
+function getAdjustTextReplacementPrompt(target, currentText) {
+  if (
+    !isTextAdjustTarget(target) ||
+    !Object.prototype.hasOwnProperty.call(target, "adjustTextPromptBaseline")
+  ) {
+    return "";
+  }
+
+  const originalText = String(target.adjustTextPromptBaseline ?? "");
+  const nextText = String(currentText ?? "");
+  if (originalText === nextText) {
+    return "";
+  }
+
+  return [
+    `文案修改：将原文「${formatAdjustTextPreview(originalText)}」完整替换为以下内容：`,
+    "```text",
+    nextText,
+    "```"
+  ].join("\n");
 }
 
 function isSameFillOverlayLayer(first, second) {
@@ -2982,9 +3010,13 @@ function getAdjustPromptText(target) {
       center: "居中",
       right: "右对齐"
     }[values.textAlign] || values.textAlign;
+  const textReplacementPrompt = getAdjustTextReplacementPrompt(persistedTarget, values.textContent);
 
   const lines = [];
   if (isTextTarget) {
+    if (textReplacementPrompt) {
+      lines.push(textReplacementPrompt);
+    }
     lines.push(
       `文字：文案「${formatAdjustTextPreview(values.textContent)}」，字号 ${values.fontSize}px，字重 ${values.fontWeight}，行高 ${values.lineHeight}px，${textAlignLabel}，文字颜色 ${formatAdjustColorValue(values.textColorCss || values.textColor)}。`,
       `布局：尺寸 ${values.width}px × ${values.height}px${sizeConstraintText}，内边距 上${values.paddingTop}px 右${values.paddingRight}px 下${values.paddingBottom}px 左${values.paddingLeft}px。`
