@@ -1,69 +1,50 @@
-# Privacy Policy for Design Cursor
+# Design Cursor 隐私政策
 
-Last updated: March 28, 2026
+更新日期：2026 年 11 月 7 日
 
-Design Cursor is a browser extension that helps users select elements on a web page and copy structured page context for use in AI tools and editors.
+本隐私政策适用于 Design Cursor Chrome / Edge 浏览器扩展。Design Cursor 帮助你在网页中选中元素或文本、调整布局和样式，并将页面上下文复制为适合 AI 协作的结构化说明。
 
-## Summary
+## 数据处理原则
 
-Design Cursor does not operate a backend service, does not sell user data, and does not use remote code. The extension works locally in the user's browser to let the user select page elements and copy the selected context to the clipboard.
+Design Cursor 在你的浏览器本地运行，不提供后端服务，不要求注册账号，不向开发者或第三方服务器上传页面内容、网址、修改要求或剪贴板内容，也不出售用户数据。扩展不包含广告、使用情况分析或远程追踪功能。
 
-## Information the extension may access
+## 扩展会访问哪些信息
 
-When the user activates the extension on a web page, Design Cursor may access:
+当你点击扩展图标或使用快捷键，在当前网页启动扩展后，为完成元素选择、预览调整和上下文生成，扩展会在本地读取或处理：
 
-- Page title
-- Page URL
-- Text content from user-selected elements or text fragments
-- Related HTML snippets from user-selected elements
-- Basic layout and style information for user-selected elements, such as size, position, color, background color, font size, font weight, border radius, display, and position
+- 当前页面的标题和 URL。
+- 你选择的元素或文本片段，以及相关 HTML 片段、选择器和可访问性属性。
+- 元素的尺寸、位置、布局、字体、颜色、边距、圆角和阴影等样式信息。
+- 你输入的修改要求，以及选择、排版和样式调整的临时操作记录。
 
-Because users may choose content from any web page, selected content may incidentally include personal information that appears on that page.
+你选择的网页内容或相关 HTML 片段可能包含个人信息，页面 URL 也可能包含查询参数等敏感信息。这些信息仅用于你主动发起的页面编辑和上下文复制流程。
 
-## How information is used
+## 信息用途与剪贴板
 
-The extension uses the accessed information only to:
+上述信息仅用于在当前页面识别目标、展示选区和编辑面板、预览修改、支持撤销与重做，以及生成结构化页面上下文。
 
-- Enable element selection on the current page
-- Build structured context from the user's selected elements
-- Copy that context to the user's clipboard at the user's request
+只有当你执行复制操作时，扩展才会将对应内容写入系统剪贴板。扩展不读取系统剪贴板内容，也不会自动将内容发送给 AI 工具。你自行将内容粘贴到其他应用或服务后，其处理方式受相应服务的隐私政策约束。复制前请检查内容是否包含不希望分享的信息。
 
-The extension uses this information only for the extension's single purpose: helping users capture structured webpage context for AI-assisted editing and prompting.
+## 数据保存与清除
 
-## Data sharing
+选中项、修改要求和操作历史暂存在当前网页的内存中。扩展不使用本地存储、浏览器同步存储或远程数据库持久保存这些数据。刷新或关闭当前网页会清除该页面中的扩展临时状态。
 
-Design Cursor does not sell, transmit, or share user data with the developer or third parties.
+已复制的内容可能继续保留在系统剪贴板或你使用的剪贴板管理工具中；主动下载的 SVG 文件会保存在你选择的本地位置。这些副本不随网页刷新或扩展卸载自动删除，你可以通过相应系统或应用自行管理和删除。
 
-The extension does not send selected page content, page URLs, or clipboard payloads to any remote server.
+## 权限用途
 
-## Data storage and retention
+扩展仅申请以下权限：
 
-Design Cursor does not store collected page content on a remote server.
+- `activeTab`：在你点击扩展图标或使用快捷键后，临时访问当前标签页，以提供页面选择和编辑功能。
+- `scripting`：将扩展自带的脚本和样式注入当前标签页，运行选择器、编辑面板和预览功能。
+- `clipboardWrite`：在你主动复制时，将生成的上下文写入剪贴板。
 
-The extension does not maintain a user account system and does not intentionally retain user-selected content after the browser session beyond what is temporarily needed to provide the selection and copy workflow in the active page.
+扩展不申请浏览历史、Cookie 或剪贴板读取权限，不在后台持续收集你的浏览记录。扩展逻辑随安装包提供，不加载远程可执行代码。
 
-## Permissions
+## 政策更新
 
-Design Cursor requests the following permissions:
+如果扩展的数据处理方式发生变化，本政策将同步更新，并在本文顶部标注新的更新日期。
 
-- `activeTab`: used only after the user clicks the extension icon or triggers the keyboard shortcut on the current page
-- `clipboardWrite`: used only when the user chooses to copy the generated context
-- `scripting`: used to inject the extension's packaged content script and stylesheet into the active tab after a user gesture so the page element picker can run on the current page
+## 联系方式
 
-## Remote code
-
-Design Cursor does not use remote code. All extension logic is packaged with the extension itself.
-
-## Children's privacy
-
-Design Cursor is not directed to children and does not knowingly collect personal information from children.
-
-## Changes to this policy
-
-This privacy policy may be updated from time to time. If the policy changes, the updated version will be published at the same public URL with a revised "Last updated" date.
-
-## Contact
-
-If you have questions about this privacy policy, please contact the publisher through the contact information provided in the Chrome Web Store listing or the project's public repository:
-
-https://github.com/Niall-Young/design_cursor
+如对本政策或扩展的数据处理有疑问，请通过 [Design Cursor GitHub 仓库的 Issues](https://github.com/Niall-Young/design_cursor/issues) 联系维护者。提交公开问题时，请勿附带密码、访问令牌或其他敏感个人信息。
