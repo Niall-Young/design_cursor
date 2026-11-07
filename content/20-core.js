@@ -1139,43 +1139,39 @@ function setTargetLayoutPrompt(target, value) {
   persistedTarget.layoutPromptText = value || "";
 }
 
-function applyLayoutInteractionPrompts(draggedTarget, dropPlan) {
-  if (!draggedTarget || !dropPlan) {
-    return;
-  }
+function describeLayoutIdentity(element) {
+  if (!(element instanceof Element)) return "无";
+  return `${describeElementForLayoutPrompt(element)}（选择器：${cssPath(element)}；HTML：${truncate(element.outerHTML, 1200)}）`;
+}
 
+function captureLayoutInstruction(draggedTarget, dropPlan, sourceIdentity) {
+  const source = sourceIdentity || describeLayoutIdentity(getTargetElement(draggedTarget));
   if (dropPlan.operation === "swap" && dropPlan.targetElement) {
-    const targetTarget = createElementTarget(dropPlan.targetElement);
-    setTargetLayoutPrompt(
-      draggedTarget,
-      `与${describeElementForLayoutPrompt(dropPlan.targetElement)}交换位置。`
-    );
-    setTargetLayoutPrompt(
-      targetTarget,
-      `与${describeElementForLayoutPrompt(getTargetElement(draggedTarget))}交换位置。`
-    );
-    return;
+    return `交换以下两个元素的位置，只执行一次交换，保留各自内容与事件：\n- 元素 A：${source}\n- 元素 B：${describeLayoutIdentity(dropPlan.targetElement)}`;
   }
-
   if (dropPlan.operation === "insert") {
-    if (dropPlan.targetElement && dropPlan.position) {
-      setTargetLayoutPrompt(
-        draggedTarget,
-        `将该元素移动到${describeElementForLayoutPrompt(dropPlan.targetElement)}${
-          dropPlan.position === "before" ? "之前" : "之后"
-        }，并遵循目标容器当前的布局与对齐方式。`
-      );
-      return;
-    }
+    const anchor = dropPlan.referenceNode;
+    const nextElement = anchor instanceof Element ? anchor : anchor?.nextElementSibling;
+    const destination = nextElement
+      ? `以下锚点元素之前：${describeLayoutIdentity(nextElement)}`
+      : "容器末尾";
+    return `移动元素：${source}\n- 目标容器：${describeLayoutIdentity(dropPlan.parent)}\n- 插入位置：${destination}。遵循目标容器的布局与对齐方式。`;
+  }
+  return "";
+}
 
-    if (dropPlan.parent) {
-      setTargetLayoutPrompt(
-        draggedTarget,
-        `将该元素移动到${describeContainerForLayoutPrompt(
-          dropPlan.parent
-        )}容器末尾，并遵循该容器当前的布局与对齐方式。`
-      );
-    }
+function applyLayoutInteractionPrompts(draggedTarget, dropPlan, instruction) {
+  if (!draggedTarget || !instruction) return;
+  const persistedTarget = findSelectedTarget(draggedTarget) || draggedTarget;
+  state.layoutOperationSequence += 1;
+  const step = `操作 ${state.layoutOperationSequence}（定位信息采集于本次操作前）：\n${instruction}`;
+  const targets = [persistedTarget];
+  if (dropPlan.operation === "swap") {
+    const other = findSelectedTarget(createElementTarget(dropPlan.targetElement));
+    if (other && other !== persistedTarget) targets.push(other);
+  }
+  for (const target of targets) {
+    setTargetLayoutPrompt(target, [target.layoutPromptText, step].filter(Boolean).join("\n\n"));
   }
 }
 

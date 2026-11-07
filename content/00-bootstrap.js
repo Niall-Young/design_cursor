@@ -10,6 +10,7 @@ const state = {
   hoveredSelectedTarget: null,
   selectedTargets: [],
   associationMode: false,
+  layoutOperationSequence: 0,
   hierarchyChildMemory: new WeakMap(),
   lastPointerClientX: null,
   lastPointerClientY: null,

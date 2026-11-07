@@ -1768,6 +1768,7 @@ function startLayoutDrag(index, event, dragMode = "free") {
     return;
   }
 
+  const sourceIdentity = describeLayoutIdentity(draggedElement);
   const preview = draggedElement.cloneNode(true);
   const draggedElementOpacity = draggedElement.style.opacity;
   const draggedElementDisplay = draggedElement.style.display;
@@ -1813,6 +1814,7 @@ function startLayoutDrag(index, event, dragMode = "free") {
     draggedElementOpacity,
     draggedElementDisplay,
     originalPosition,
+    sourceIdentity,
     offsetX: event.clientX - rect.left,
     offsetY: event.clientY - rect.top,
     draggedRect: {
@@ -2013,6 +2015,15 @@ function finishLayoutDrag(event) {
   const draggedElement = getTargetElement(draggedTarget);
   let changed = false;
   const previousSelectionSnapshot = snapshotSelection();
+  // Exclude the temporary placeholder from positional selectors and HTML.
+  const placeholderParent = dragSession.placeholder?.parentNode;
+  const placeholderNext = dragSession.placeholder?.nextSibling;
+  dragSession.placeholder?.remove();
+  const instructionPlan = dropPlan.operation === "insert" && placeholderParent
+    ? { ...dropPlan, parent: placeholderParent, referenceNode: placeholderNext }
+    : dropPlan;
+  const instruction = captureLayoutInstruction(draggedTarget, instructionPlan, dragSession.sourceIdentity);
+  if (placeholderParent) placeholderParent.insertBefore(dragSession.placeholder, placeholderNext);
 
   if (dropPlan.operation === "swap") {
     const targetElement = dropPlan.targetElement;
@@ -2029,7 +2040,7 @@ function finishLayoutDrag(event) {
 
     changed = swapElementPositions(draggedElement, targetElement);
     if (changed) {
-      applyLayoutInteractionPrompts(draggedTarget, dropPlan);
+      applyLayoutInteractionPrompts(draggedTarget, dropPlan, instruction);
       pushHistoryEntry({
         type: "dom-positions",
         positions: previousPositions,
@@ -2048,7 +2059,7 @@ function finishLayoutDrag(event) {
       changed = moveElementToPlacement(draggedElement, dropPlan.parent, dropPlan.referenceNode);
     }
     if (changed) {
-      applyLayoutInteractionPrompts(draggedTarget, dropPlan);
+      applyLayoutInteractionPrompts(draggedTarget, dropPlan, instruction);
       pushHistoryEntry({
         type: "dom-move",
         element: draggedElement,
