@@ -8,7 +8,7 @@ function setup() {
   }
   const a = new Element('A'), b = new Element('B'), parent = new Element('container');
   const targets = [a, b].map(element => ({ element }));
-  const context = vm.createContext({ Element, state: { selectedTargets: targets, layoutOperationSequence: 0 },
+  const context = vm.createContext({ Element, state: { selectedTargets: targets, layoutOperationSequence: 0, layoutCopies: new WeakMap() },
     cssPath: e => `#${e.name}`, truncate: s => s,
     getTargetElement: t => t.element, createElementTarget: element => ({ element }),
     getTargetPreviewText: t => t.element.name,

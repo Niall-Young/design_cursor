@@ -11,6 +11,7 @@ const state = {
   selectedTargets: [],
   associationMode: false,
   layoutOperationSequence: 0,
+  layoutCopies: new WeakMap(),
   hierarchyChildMemory: new WeakMap(),
   lastPointerClientX: null,
   lastPointerClientY: null,

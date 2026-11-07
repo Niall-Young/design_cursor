@@ -1175,9 +1175,8 @@ function getLayoutInsertButtonPosition(rect, edge) {
 }
 
 function buildDuplicateLayoutPrompt(element, parent, edge) {
-  return `复制${describeElementForLayoutPrompt(element)}，并插入到原元素${getLayoutInsertEdgeLabel(
-    edge
-  )}，遵循${describeContainerForLayoutPrompt(parent)}当前的布局与对齐方式。`;
+  const copyIdentity = `副本 ${state.layoutOperationSequence + 1}（由操作 ${state.layoutOperationSequence + 1} 创建）`;
+  return `复制以下原件，创建${copyIdentity}：\n- 原件：${describeLayoutIdentity(element)}\n- 初始容器：${describeLayoutIdentity(parent)}\n- 初始位置：原件${edge === "left" || edge === "top" ? "之前" : "之后"}。后续提到该副本时，操作这个新元素，不要再次复制原件。`;
 }
 
 function duplicateLayoutTarget(target, edge) {
@@ -1197,11 +1196,15 @@ function duplicateLayoutTarget(target, edge) {
   }
 
   const previousSelectionSnapshot = snapshotSelection();
+  const instruction = buildDuplicateLayoutPrompt(sourceElement, config.parent, edge);
   config.parent.insertBefore(clone, referenceNode);
-  setTargetLayoutPrompt(persistedTarget, buildDuplicateLayoutPrompt(sourceElement, config.parent, edge));
+  const cloneTarget = createElementTarget(clone);
+  state.selectedTargets.push(cloneTarget);
+  state.layoutCopies.set(clone, `副本 ${state.layoutOperationSequence + 1}（由操作 ${state.layoutOperationSequence + 1} 创建）`);
+  applyLayoutInteractionPrompts(persistedTarget, { operation: "duplicate", targetElement: clone }, instruction);
 
   state.hoveredTarget = null;
-  state.hoveredSelectedTarget = persistedTarget;
+  state.hoveredSelectedTarget = cloneTarget;
   state.layoutInsertHint = null;
 
   pushHistoryEntry({

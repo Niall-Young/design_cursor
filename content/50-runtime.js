@@ -405,6 +405,7 @@ function buildClipboardPayloadForTargets(targets) {
       `- 类型：${item.kind === "text" ? "文本片段" : "元素"}`,
       `- 标签描述：${item.label}`,
       `- 选择清单编号：${item.index}`,
+      ...(item.layoutPrompt ? [`- 布局身份：${item.layoutIdentity}`] : []),
       `- 选择器：${item.selector || "不可用"}`,
       `- 角色：${item.role || "无"}`,
       `- Aria 标签：${item.ariaLabel || "无"}`,

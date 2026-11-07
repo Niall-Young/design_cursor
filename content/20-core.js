@@ -946,6 +946,7 @@ function targetToContext(target, index) {
     manualPrompt: instructionParts.manualPrompt,
     layoutPrompt: instructionParts.layoutPrompt,
     adjustPrompt: instructionParts.adjustPrompt,
+    layoutIdentity: state.layoutCopies.get(element) || "原页面元素",
     selector: cssPath(element),
     label: getTargetLabel(target),
     role: element.getAttribute("role") || "",
@@ -1141,7 +1142,8 @@ function setTargetLayoutPrompt(target, value) {
 
 function describeLayoutIdentity(element) {
   if (!(element instanceof Element)) return "无";
-  return `${describeElementForLayoutPrompt(element)}（选择器：${cssPath(element)}；HTML：${truncate(element.outerHTML, 1200)}）`;
+  const copyIdentity = state.layoutCopies.get(element);
+  return `${copyIdentity ? `${copyIdentity}；` : ""}${describeElementForLayoutPrompt(element)}（选择器：${cssPath(element)}；HTML：${truncate(element.outerHTML, 1200)}）`;
 }
 
 function captureLayoutInstruction(draggedTarget, dropPlan, sourceIdentity) {
@@ -1166,12 +1168,20 @@ function applyLayoutInteractionPrompts(draggedTarget, dropPlan, instruction) {
   state.layoutOperationSequence += 1;
   const step = `操作 ${state.layoutOperationSequence}（定位信息采集于本次操作前）：\n${instruction}`;
   const targets = [persistedTarget];
-  if (dropPlan.operation === "swap") {
+  if (dropPlan.operation === "swap" || dropPlan.operation === "duplicate") {
     const other = findSelectedTarget(createElementTarget(dropPlan.targetElement));
     if (other && other !== persistedTarget) targets.push(other);
   }
+  // Carry dependencies with either participant, including when copying only one item.
+  const operations = new Map();
   for (const target of targets) {
-    setTargetLayoutPrompt(target, [target.layoutPromptText, step].filter(Boolean).join("\n\n"));
+    for (const operation of target.layoutOperations || []) operations.set(operation.id, operation);
+  }
+  operations.set(state.layoutOperationSequence, { id: state.layoutOperationSequence, text: step });
+  const ordered = [...operations.values()].sort((a, b) => a.id - b.id);
+  for (const target of targets) {
+    target.layoutOperations = ordered;
+    setTargetLayoutPrompt(target, ordered.map(operation => operation.text).join("\n\n"));
   }
 }
 
